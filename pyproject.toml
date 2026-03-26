@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "commercexl"
+dynamic = ["version"]
+description = "Composable commerce core for products, order items, and payments."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "xlartas" },
+]
+urls = { Homepage = "https://github.com/Artasov/commercexl", Repository = "https://github.com/Artasov/commercexl", Issues = "https://github.com/Artasov/commercexl/issues" }
+keywords = [
+    "commerce",
+    "fastapi",
+    "sqlalchemy",
+    "payments",
+    "orders",
+    "checkout",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Framework :: FastAPI",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "pydantic>=2.9.0",
+    "sqlalchemy>=2.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "aiosqlite>=0.20.0",
+    "httpx>=0.28.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.0.0",
+]
+dev = [
+    "aiosqlite>=0.20.0",
+    "build>=1.2.2",
+    "httpx>=0.28.0",
+    "mypy>=1.11.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.0.0",
+    "ruff>=0.11.0",
+    "twine>=6.1.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "commercexl._version.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+exclude = ["tests", "tests.*"]
+
+[tool.setuptools.package-data]
+commercexl = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+packages = ["commercexl"]
+ignore_missing_imports = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_unused_ignores = true
