@@ -5,12 +5,21 @@ from commercexl.models import (
     BalanceOrderItemORM,
     BalancePaymentORM,
     BalanceProductORM,
+    EmployeeAvailabilityIntervalORM,
+    EmployeeLeaveORM,
+    EmployeeORM,
     Currency,
+    GiftCertificateORM,
+    GiftCertificateOrderItemORM,
+    GiftCertificateUsageORM,
     OrderItemORM,
     OrderORM,
     PaymentORM,
     ProductORM,
     ProductPriceORM,
+    PromocodeORM,
+    PromocodeProductDiscountORM,
+    PromocodeUsageORM,
     UserBalanceORM,
 )
 from commercexl.models.orm_base import CommerceBase
@@ -35,6 +44,11 @@ from commercexl.services.payment.base import AbstractCallbackPaymentService, Abs
 from commercexl.services.payment.handmade import HandMadePaymentService
 from commercexl.services.products.balance import BalanceOrderItemService, BalanceProductService
 from commercexl.services.products.base import AbstractProductService, DefaultProductService
+from commercexl.services.products.gift_certificate import (
+    GiftCertificate,
+    GiftCertificateOrderItemService,
+    GiftCertificateProductService,
+)
 
 __all__ = (
     "__version__",
@@ -58,6 +72,15 @@ __all__ = (
     "DefaultOrderItemService",
     "DefaultOrderService",
     "DefaultProductService",
+    "EmployeeAvailabilityIntervalORM",
+    "EmployeeLeaveORM",
+    "EmployeeORM",
+    "GiftCertificate",
+    "GiftCertificateORM",
+    "GiftCertificateOrderItemORM",
+    "GiftCertificateOrderItemService",
+    "GiftCertificateProductService",
+    "GiftCertificateUsageORM",
     "HandMadePaymentService",
     "OrderItemORM",
     "OrderORM",
@@ -68,6 +91,9 @@ __all__ = (
     "ProductOrderConfig",
     "ProductOrderConfigBuilder",
     "ProductPriceORM",
+    "PromocodeORM",
+    "PromocodeProductDiscountORM",
+    "PromocodeUsageORM",
     "UserBalanceORM",
     "create_router",
     "get_commerce",
