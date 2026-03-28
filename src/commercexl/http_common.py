@@ -14,7 +14,7 @@ def get_base_url(request: Request) -> str:
 
 
 async def load_order_payload(session: AsyncSession, order_id: str | UUID, runtime: BaseRuntime) -> OrderDTO:
-    """Р’СЃРµРіРґР° РІРѕР·РІСЂР°С‰Р°РµС‚ Р°РєС‚СѓР°Р»СЊРЅСѓСЋ DTO Р·Р°РєР°Р·Р° РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ РІ Р‘Р”."""
+    """Всегда возвращает актуальную DTO заказа после изменения в БД."""
     order = await runtime.refresh_order(session, order_id)
     return await runtime.create_order_serializer().serialize_order(session, order)
 

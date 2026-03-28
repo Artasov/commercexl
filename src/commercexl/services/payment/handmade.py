@@ -10,7 +10,7 @@ from commercexl.services.payment.base import AbstractPaymentService
 
 
 class HandMadePaymentService(AbstractPaymentService):
-    """Р СѓС‡РЅР°СЏ РѕРїР»Р°С‚Р° Р±РµР· РІРЅРµС€РЅРµРіРѕ РїСЂРѕРІР°Р№РґРµСЂР°."""
+    """Ручная оплата без внешнего провайдера."""
 
     payment_system = "handmade"
     payment_kind = "handmadepayment"

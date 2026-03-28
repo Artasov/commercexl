@@ -9,7 +9,7 @@ from commercexl.models.orm_base import CommerceBase
 
 
 class BalanceProductORM(CommerceBase):
-    """Р”РѕС‡РµСЂРЅСЏСЏ Р·Р°РїРёСЃСЊ РІСЃС‚СЂРѕРµРЅРЅРѕРіРѕ РїСЂРѕРґСѓРєС‚Р° РїРѕРїРѕР»РЅРµРЅРёСЏ Р±Р°Р»Р°РЅСЃР°."""
+    """Дочерняя запись встроенного продукта пополнения баланса."""
 
     __tablename__ = "commerce_balance_product"
 
@@ -17,7 +17,7 @@ class BalanceProductORM(CommerceBase):
 
 
 class BalanceOrderItemORM(CommerceBase):
-    """Р”РѕС‡РµСЂРЅСЏСЏ Р·Р°РїРёСЃСЊ РїРѕР·РёС†РёРё Р·Р°РєР°Р·Р° РїРѕРїРѕР»РЅРµРЅРёСЏ Р±Р°Р»Р°РЅСЃР°."""
+    """Дочерняя запись позиции заказа пополнения баланса."""
 
     __tablename__ = "commerce_balance_order_item"
 

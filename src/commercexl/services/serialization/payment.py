@@ -8,7 +8,7 @@ from commercexl.services.base_runtime import BaseRuntime
 
 
 class PaymentSerializer(BaseRuntime):
-    """РЎРµСЂРёР°Р»РёР·Р°С†РёСЏ РѕРїР»Р°С‚С‹ РґР»СЏ API."""
+    """Сериализация оплаты для API."""
 
     async def serialize_payment(self, session: AsyncSession, payment_id: int) -> PaymentDTO:
         payment: PaymentORM | None = await session.get(PaymentORM, payment_id)

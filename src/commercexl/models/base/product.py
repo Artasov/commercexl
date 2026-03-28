@@ -10,24 +10,24 @@ from commercexl.models.orm_base import CommerceBase
 
 
 class ProductORM(CommerceBase):
-    """Р‘Р°Р·РѕРІР°СЏ Р·Р°РїРёСЃСЊ РїСЂРѕРґСѓРєС‚Р° РІ РєР°С‚Р°Р»РѕРіРµ commerce."""
+    """Базовая запись продукта в каталоге commerce."""
 
     __tablename__ = "commerce_product"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     pic: Mapped[str | None] = mapped_column(String(100))
     description: Mapped[str | None] = mapped_column(Text)
     short_description: Mapped[str | None] = mapped_column(Text)
     is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_installment_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    kind: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class ProductPriceORM(CommerceBase):
-    """Р¦РµРЅР° РїСЂРѕРґСѓРєС‚Р° РІ РєРѕРЅРєСЂРµС‚РЅРѕР№ РІР°Р»СЋС‚Рµ."""
+    """Цена продукта в конкретной валюте."""
 
     __tablename__ = "commerce_product_price"
     __table_args__ = (
@@ -35,10 +35,9 @@ class ProductPriceORM(CommerceBase):
     )
 
     id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("commerce_product.id"), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     exponent: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     offset: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
-    product_id: Mapped[int] = mapped_column(ForeignKey("commerce_product.id"), nullable=False)
-
 

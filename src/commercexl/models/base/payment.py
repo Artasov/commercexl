@@ -11,7 +11,7 @@ from commercexl.models.orm_base import CommerceBase
 
 
 class Currency(StrEnum):
-    """Р’СЃС‚СЂРѕРµРЅРЅС‹Рµ РєРѕРґС‹ РІР°Р»СЋС‚ РєР°Рє СѓРґРѕР±РЅС‹Рµ РєРѕРЅСЃС‚Р°РЅС‚С‹. РџСЂРѕРµРєС‚ РјРѕР¶РµС‚ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ Рё РѕР±С‹С‡РЅС‹Рµ СЃС‚СЂРѕРєРё."""
+    """Встроенные коды валют как удобные константы. Проект может использовать и обычные строки."""
 
     USD = "USD"
     RUB = "RUB"
@@ -20,18 +20,16 @@ class Currency(StrEnum):
 
 
 class PaymentORM(CommerceBase):
-    """Р‘Р°Р·РѕРІР°СЏ Р·Р°РїРёСЃСЊ РѕРїР»Р°С‚С‹ Р±РµР· РїСЂРёРІСЏР·РєРё Рє РєРѕРЅРєСЂРµС‚РЅРѕР№ РїР»Р°С‚С‘Р¶РЅРѕР№ СЃРёСЃС‚РµРјРµ."""
+    """Базовая запись оплаты без привязки к конкретной платёжной системе."""
 
     __tablename__ = "commerce_payment"
 
     id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    user_id: Mapped[int | None] = mapped_column(BigInteger().with_variant(Integer, "sqlite"))
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
-    payment_url: Mapped[str | None] = mapped_column(String(500))
     is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    payment_url: Mapped[str | None] = mapped_column(String(500))
     kind: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    user_id: Mapped[int | None] = mapped_column(BigInteger().with_variant(Integer, "sqlite"))
-
-
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

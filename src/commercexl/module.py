@@ -16,7 +16,7 @@ def _merge_unique_classes(current: tuple[type, ...], new_items: tuple[type, ...]
 
 @dataclass(frozen=True, init=False)
 class ProductOrderConfig:
-    """РЇРІРЅР°СЏ СЃРІСЏР·РєР° product-service Рё item-service РґР»СЏ РѕРґРЅРѕРіРѕ РїСЂРѕРґСѓРєС‚Р° РёР»Рё РіСЂСѓРїРїС‹ РїСЂРѕСЃС‚С‹С… РїСЂРѕРґСѓРєС‚РѕРІ."""
+    """Явная связка product-service и item-service для одного продукта или группы простых продуктов."""
 
     product_service_classes: tuple[type, ...]
     order_item_service_class: type | None = None
@@ -32,7 +32,7 @@ class ProductOrderConfig:
 
 
 class ProductOrderConfigBuilder:
-    """РљРѕРЅС„РёРі СЃРІСЏР·РѕРє `product + order item` РґР»СЏ `commerce`."""
+    """Конфиг связок `product + order item` для `commerce`."""
 
     def __init__(
             self,
@@ -114,7 +114,7 @@ class ProductOrderConfigBuilder:
 
 
 class OrderRuntimeConfigBuilder:
-    """РљРѕРЅС„РёРі РѕР±С‰РµРіРѕ order runtime Рё serializer РґР»СЏ `commerce`."""
+    """Конфиг общего order runtime и serializer для `commerce`."""
 
     def __init__(
             self,
@@ -151,7 +151,7 @@ class OrderRuntimeConfigBuilder:
 
 
 class PaymentConfigBuilder:
-    """РљРѕРЅС„РёРі payment-service РєР»Р°СЃСЃРѕРІ `commerce`."""
+    """Конфиг payment-service классов `commerce`."""
 
     def __init__(
             self,
@@ -206,7 +206,7 @@ class PaymentConfigBuilder:
 
 
 class CommerceModule:
-    """РЇРІРЅР°СЏ С‚РѕС‡РєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ `commerce` Рє РїСЂРѕРµРєС‚Сѓ."""
+    """Явная точка подключения `commerce` к проекту."""
 
     def __init__(
             self,

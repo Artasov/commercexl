@@ -11,7 +11,7 @@ from commercexl.utils import build_media_url
 
 
 class ProductSerializer(BaseRuntime):
-    """РЎРµСЂРёР°Р»РёР·Р°С†РёСЏ РїСѓР±Р»РёС‡РЅС‹С… РґР°РЅРЅС‹С… РїСЂРѕРґСѓРєС‚Р°."""
+    """Сериализация публичных данных продукта."""
 
     async def get_latest_balance_product(self, session: AsyncSession) -> ProductDTO | None:
         query = (

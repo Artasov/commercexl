@@ -6,7 +6,7 @@ from commercexl.dto.promocode import PromocodeDTO
 
 
 class OrderDTO(BaseModel):
-    """Р•РґРёРЅР°СЏ DTO Р·Р°РєР°Р·Р° РґР»СЏ API СЃ РѕР±С‰РёРјРё РїРѕР»СЏРјРё Рё optional-РїРѕР»СЏРјРё РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РїСЂРѕРґСѓРєС‚Р°."""
+    """Единая DTO заказа для API с общими полями и optional-полями конкретного продукта."""
 
     id: str
     amount: float | None = None
@@ -31,7 +31,7 @@ class OrderDTO(BaseModel):
 
 
 class OrderItemDTO(BaseModel):
-    """РћРґРЅР° РїРѕР·РёС†РёСЏ РІРЅСѓС‚СЂРё РѕР±С‰РµРіРѕ Р·Р°РєР°Р·Р° СЃ РЅРµСЃРєРѕР»СЊРєРёРјРё РїСЂРѕРґСѓРєС‚Р°РјРё."""
+    """Одна позиция внутри общего заказа с несколькими продуктами."""
 
     id: str
     amount: float | None = None

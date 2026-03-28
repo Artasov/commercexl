@@ -11,7 +11,7 @@ from commercexl.services.serialization.product import ProductSerializer
 
 
 class OrderSerializer(BaseRuntime):
-    """РЎРµСЂРёР°Р»РёР·Р°С†РёСЏ Р·Р°РєР°Р·Р° Рё РµРіРѕ РїРѕР·РёС†РёР№."""
+    """Сериализация заказа и его позиций."""
 
     @staticmethod
     def create_product_serializer() -> ProductSerializer:

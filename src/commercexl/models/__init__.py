@@ -1,5 +1,5 @@
 from commercexl.models.base import Currency, OrderItemORM, OrderORM, PaymentORM, ProductORM, ProductPriceORM
-from commercexl.models.employees import ClientORM, EmployeeAvailabilityIntervalORM, EmployeeLeaveORM, EmployeeORM
+from commercexl.models.employees import EmployeeAvailabilityIntervalORM, EmployeeLeaveORM, EmployeeORM
 from commercexl.models.payments import BalancePaymentORM, HandMadePaymentORM
 from commercexl.models.products import (
     BalanceOrderItemORM,
@@ -15,13 +15,12 @@ from commercexl.models.promocodes import (
     commerce_promocode_discounts,
     commerce_promocodeproductdiscount_specific_users,
 )
-from commercexl.models.user_balance import UserBalanceORM
+from commercexl.models.user_credits_balance import UserCreditsBalanceORM
 
 __all__ = (
     "BalancePaymentORM",
     "BalanceOrderItemORM",
     "BalanceProductORM",
-    "ClientORM",
     "commerce_promocode_discounts",
     "commerce_promocodeproductdiscount_specific_users",
     "Currency",
@@ -40,5 +39,5 @@ __all__ = (
     "PromocodeORM",
     "PromocodeProductDiscountORM",
     "PromocodeUsageORM",
-    "UserBalanceORM",
+    "UserCreditsBalanceORM",
 )

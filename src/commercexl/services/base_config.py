@@ -11,7 +11,7 @@ CreditsConverterRule = Decimal | Callable[[Decimal], Decimal]
 
 
 class BaseConfig:
-    """РљРѕРЅС„РёРі РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РґР»СЏ Р±Р°Р·РѕРІРѕРіРѕ `commerce`."""
+    """Конфиг по умолчанию для базового `commerce`."""
 
     PAYMENT_SYSTEMS = {
         "RUB": ("handmade", "balance"),

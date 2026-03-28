@@ -40,34 +40,34 @@ class PromocodeProductDiscountORM(CommerceBase):
     __tablename__ = "commerce_promocodeproductdiscount"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("commerce_product.id"), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     max_usage: Mapped[int | None] = mapped_column(SmallInteger)
     max_usage_per_user: Mapped[int | None] = mapped_column(SmallInteger)
     interval_days: Mapped[int | None] = mapped_column(SmallInteger)
-    product_id: Mapped[int] = mapped_column(ForeignKey("commerce_product.id"), nullable=False)
 
 
 class PromocodeORM(CommerceBase):
     __tablename__ = "commerce_promocode"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
-    description: Mapped[str | None] = mapped_column(String(255))
     discount_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255))
     start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class PromocodeUsageORM(CommerceBase):
     __tablename__ = "commerce_promocodeusage"
 
     id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    promocode_id: Mapped[int] = mapped_column(ForeignKey("commerce_promocode.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
+    promocode_id: Mapped[int] = mapped_column(ForeignKey("commerce_promocode.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

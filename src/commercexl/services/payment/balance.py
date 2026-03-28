@@ -11,7 +11,7 @@ from commercexl.services.pricing.credits import Credits
 
 
 class BalancePaymentService(AbstractPaymentService):
-    """РћРїР»Р°С‚Р° РІРЅСѓС‚СЂРµРЅРЅРёРј Р±Р°Р»Р°РЅСЃРѕРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ."""
+    """Оплата внутренним балансом пользователя."""
 
     payment_system = "balance"
     payment_kind = "balancepayment"

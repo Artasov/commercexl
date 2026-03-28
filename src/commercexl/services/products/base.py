@@ -18,13 +18,7 @@ ItemRecordT = TypeVar("ItemRecordT")
 
 
 class AbstractProductService(ABC, Generic[ItemRecordT]):
-    """
-    РђР±СЃС‚СЂР°РєС‚РЅС‹Р№ СЃРµСЂРІРёСЃ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РІРёРґР° РїСЂРѕРґСѓРєС‚Р°.
-
-    РџРѕС‚РѕРјРѕРє СЌС‚РѕРіРѕ РєР»Р°СЃСЃР° РѕРїРёСЃС‹РІР°РµС‚ РѕРґРёРЅ РїСЂРѕРґСѓРєС‚ РІРЅСѓС‚СЂРё `commerce`:
-    РєР°РєРёРµ `kind` РµРјСѓ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‚, РєР°РєРѕР№ item-service СЃ РЅРёРј СЂР°Р±РѕС‚Р°РµС‚
-    Рё РєР°Рє РІС‹РґР°С‘С‚СЃСЏ СЌС‚РѕС‚ РїСЂРѕРґСѓРєС‚.
-    """
+    """Абстрактный сервис конкретного вида продукта внутри `commerce`."""
 
     kind: str = ""
     product_kinds: tuple[str, ...] = ()
@@ -160,7 +154,7 @@ class AbstractProductService(ABC, Generic[ItemRecordT]):
 
 
 class DefaultProductService(AbstractProductService[ItemRecordT], ABC):
-    """РџСЂРѕСЃС‚РµР№С€Р°СЏ Р±Р°Р·Р° РґР»СЏ РїСЂРѕРґСѓРєС‚Р° Р±РµР· СЃРІРѕРµР№ Р»РѕРіРёРєРё."""
+    """Простейшая база для продукта без своей логики."""
 
     __skip_product_validation__ = True
 

@@ -14,7 +14,7 @@ from commercexl.services.promocode.base import Promocode
 
 
 class OrderCreate(BaseRuntime):
-    """РЎРѕР·РґР°РЅРёРµ checkout-Р·Р°РєР°Р·Р° Рё РµРіРѕ РїРѕР·РёС†РёР№."""
+    """Создание checkout-заказа и его позиций."""
 
     @staticmethod
     def get_global_payload_keys() -> set[str]:

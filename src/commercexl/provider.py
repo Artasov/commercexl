@@ -10,13 +10,13 @@ _commerce_provider: CommerceProvider | None = None
 
 
 def set_commerce_provider(provider: CommerceProvider) -> None:
-    """Р РµРіРёСЃС‚СЂРёСЂСѓРµС‚ project-level provider РґР»СЏ core `commerce`."""
+    """Регистрирует project-level provider для core `commerce`."""
     global _commerce_provider
     _commerce_provider = provider
 
 
 def get_commerce() -> CommerceModule:
-    """Р’РѕР·РІСЂР°С‰Р°РµС‚ project-level `CommerceModule` РёР»Рё builtin-РєРѕРЅС„РёРі РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ."""
+    """Возвращает project-level `CommerceModule` или builtin-конфиг по умолчанию."""
     if _commerce_provider is not None:
         return _commerce_provider()
     return get_default_commerce_module()

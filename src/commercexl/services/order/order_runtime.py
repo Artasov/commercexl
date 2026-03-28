@@ -15,7 +15,7 @@ from commercexl.services.promocode.base import Promocode
 
 
 class OrderRuntime(OrderCreate):
-    """Р–РёР·РЅРµРЅРЅС‹Р№ С†РёРєР» checkout-Р·Р°РєР°Р·Р° Рё РµРіРѕ РїРѕР·РёС†РёР№."""
+    """Жизненный цикл checkout-заказа и его позиций."""
 
     async def calc_order_amount(self, session: AsyncSession, order: OrderORM) -> Decimal:
         items = await self.get_order_items(session, order.id)

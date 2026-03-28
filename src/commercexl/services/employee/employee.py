@@ -11,7 +11,7 @@ from commercexl.services.base_runtime import BaseRuntime
 
 
 class Employee(BaseRuntime):
-    """Р Р°СЃРїРёСЃР°РЅРёРµ РґРѕСЃС‚СѓРїРЅРѕСЃС‚Рё СЃРѕС‚СЂСѓРґРЅРёРєРѕРІ РґР»СЏ commerce-СЃС†РµРЅР°СЂРёРµРІ."""
+    """Расписание доступности сотрудников для commerce-сценариев."""
 
     @staticmethod
     def serialize_employee_availability(item: EmployeeAvailabilityIntervalORM) -> EmployeeAvailabilityDTO:
@@ -32,7 +32,7 @@ class Employee(BaseRuntime):
     async def is_employee_availability_overlap(
             session: AsyncSession, user_id: int, start: datetime, end: datetime, interval_id: int | None = None
     ) -> bool:
-        """РџСЂРѕРІРµСЂСЏРµС‚, РїРµСЂРµСЃРµРєР°РµС‚СЃСЏ Р»Рё РЅРѕРІС‹Р№ РёРЅС‚РµСЂРІР°Р» СЃ СѓР¶Рµ СЃРѕС…СЂР°РЅС‘РЅРЅС‹РјРё РёРЅС‚РµСЂРІР°Р»Р°РјРё СЃРѕС‚СЂСѓРґРЅРёРєР°."""
+        """Проверяет, пересекается ли новый интервал с уже сохранёнными интервалами сотрудника."""
         query = select(EmployeeAvailabilityIntervalORM.id).where(
             EmployeeAvailabilityIntervalORM.user_id == user_id,
             or_(

@@ -11,7 +11,7 @@ from commercexl.services.base_runtime import BaseRuntime
 
 
 class PaymentRuntime(BaseRuntime):
-    """РЎРѕР·РґР°С‘С‚ РѕРїР»Р°С‚Сѓ РЅСѓР¶РЅРѕРіРѕ С‚РёРїР° Рё РїСЂРёРІСЏР·С‹РІР°РµС‚ РµС‘ Рє Р·Р°РєР°Р·Сѓ."""
+    """Создаёт оплату нужного типа и привязывает её к заказу."""
 
     async def create(
             self,
@@ -20,10 +20,10 @@ class PaymentRuntime(BaseRuntime):
             request_base_url: str,
     ) -> PaymentORM | None:
         """
-        РЎРѕР·РґР°С‘С‚ РґРѕС‡РµСЂРЅСЋСЋ Р·Р°РїРёСЃСЊ РѕРїР»Р°С‚С‹ С‡РµСЂРµР· СЃРµСЂРІРёСЃ РІС‹Р±СЂР°РЅРЅРѕР№ РїР»Р°С‚С‘Р¶РЅРѕР№ СЃРёСЃС‚РµРјС‹.
+        Создаёт дочернюю запись оплаты через сервис выбранной платёжной системы.
 
-        РЎР°Рј `PaymentRuntime` РЅРµ Р·РЅР°РµС‚ РґРµС‚Р°Р»РµР№ РєРѕРЅРєСЂРµС‚РЅРѕР№ РѕРїР»Р°С‚С‹.
-        РћРЅ С‚РѕР»СЊРєРѕ РЅР°С…РѕРґРёС‚ РЅСѓР¶РЅС‹Р№ payment-СЃРµСЂРІРёСЃ РІ registry Рё РґР°С‘С‚ РµРјСѓ Р·Р°РєР°Р·.
+        Сам `PaymentRuntime` не знает деталей конкретной оплаты.
+        Он только находит нужный payment-сервис в registry и даёт ему заказ.
         """
         amount = Decimal(str(order.amount or 0))
         payment_service = self.payment_registry.get_service_by_system(order.payment_system)
@@ -44,7 +44,7 @@ class PaymentRuntime(BaseRuntime):
             payload: dict[str, Any],
             request_base_url: str,
     ) -> PaymentDTO:
-        """РРЅРёС†РёР°Р»РёР·РёСЂСѓРµС‚ РѕРїР»Р°С‚Сѓ РґР»СЏ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРіРѕ Р·Р°РєР°Р·Р° С‡РµСЂРµР· РїСѓР±Р»РёС‡РЅС‹Р№ endpoint."""
+        """Инициализирует оплату для уже существующего заказа через публичный endpoint."""
         payment_serializer = self.create_payment_serializer()
         if order.is_paid:
             raise self.get_bad_request("Order already paid.")
@@ -61,7 +61,7 @@ class PaymentRuntime(BaseRuntime):
         return await payment_serializer.serialize_payment(session, payment.id)
 
     async def refund(self, session: AsyncSession, order: OrderORM) -> None:
-        """Р—Р°РїСѓСЃРєР°РµС‚ РІРѕР·РІСЂР°С‚ С‡РµСЂРµР· payment-service, РєРѕС‚РѕСЂС‹Р№ РїСЂРёРІСЏР·Р°РЅ Рє СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµР№ РѕРїР»Р°С‚Рµ Р·Р°РєР°Р·Р°."""
+        """Запускает возврат через payment-service, который привязан к уже существующей оплате заказа."""
         if order.payment_id is None:
             raise self.get_bad_request("Order payment not found.")
 

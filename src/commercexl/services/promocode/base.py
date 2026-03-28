@@ -19,7 +19,7 @@ from commercexl.services.base_runtime import BaseRuntime
 
 
 class Promocode(BaseRuntime):
-    """РџСЂРѕРІРµСЂРєР° РїСЂРѕРјРѕРєРѕРґРѕРІ Рё СЂР°СЃС‡С‘С‚ СЃРєРёРґРєРё РїРѕ РёС… РѕРіСЂР°РЅРёС‡РµРЅРёСЏРј."""
+    """Проверка промокодов и расчёт скидки по их ограничениям."""
 
     async def serialize_promocode(self, session: AsyncSession, promocode_id: int | None) -> PromocodeDTO | None:
         if promocode_id is None:
@@ -68,7 +68,7 @@ class Promocode(BaseRuntime):
     async def can_apply(
             self, session: AsyncSession, user_id: int, code: str, product_id: int, currency: str
     ) -> PromocodeDTO:
-        """РџСЂРѕРІРµСЂСЏРµС‚ РїСЂРёРјРµРЅРёРјРѕСЃС‚СЊ РїСЂРѕРјРѕРєРѕРґР° Рё РІРѕР·РІСЂР°С‰Р°РµС‚ РµРіРѕ DTO РґР»СЏ UI."""
+        """Проверяет применимость промокода и возвращает его DTO для UI."""
         if await session.get(ProductORM, product_id) is None:
             raise self.get_bad_request("Product not found.")
         promocode_query = select(PromocodeORM).where(PromocodeORM.code == code).limit(1)
@@ -101,10 +101,10 @@ class Promocode(BaseRuntime):
             raise_only: bool = False,
     ) -> Decimal:
         """
-        РџСЂРѕРІРµСЂСЏРµС‚ РІСЃРµ РѕРіСЂР°РЅРёС‡РµРЅРёСЏ РїСЂРѕРјРѕРєРѕРґР° Рё, РµСЃР»Рё РЅСѓР¶РЅРѕ, СЃС‡РёС‚Р°РµС‚ РЅРѕРІСѓСЋ СЃСѓРјРјСѓ.
+        Проверяет все ограничения промокода и, если нужно, считает новую сумму.
 
-        `raise_only=True` РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚Р°Рј, РіРґРµ РЅСѓР¶РЅРѕ С‚РѕР»СЊРєРѕ РїСЂРѕРІРµСЂРёС‚СЊ РїСЂРѕРјРѕРєРѕРґ,
-        РЅРѕ РЅРµ РјРµРЅСЏС‚СЊ С†РµРЅСѓ РїСЂСЏРјРѕ СЃРµР№С‡Р°СЃ.
+        `raise_only=True` используется там, где нужно только проверить промокод,
+        но не менять цену прямо сейчас.
         """
         promocode: PromocodeORM | None = await session.get(PromocodeORM, promocode_id)
         if promocode is None:
@@ -145,14 +145,14 @@ class Promocode(BaseRuntime):
             if not is_allowed:
                 raise self.get_bad_request("Promocode not applicable for this client.")
         if discount.max_usage is not None:
-            # Р­С‚Рѕ РіР»РѕР±Р°Р»СЊРЅС‹Р№ Р»РёРјРёС‚ РЅР° РІСЃРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ РїСЂРѕРјРѕРєРѕРґР°.
+            # Это глобальный лимит на все использования промокода.
             total_usage_query = select(func.count(PromocodeUsageORM.id)).where(
                 PromocodeUsageORM.promocode_id == promocode_id_value,
             )
             if int((await session.execute(total_usage_query)).scalar_one()) >= discount.max_usage:
                 raise self.get_bad_request("Promocode usage limit reached.")
         if discount.max_usage_per_user is not None:
-            # Р­С‚Рѕ Р»РёРјРёС‚ С‚РѕР»СЊРєРѕ РЅР° РѕРґРЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.
+            # Это лимит только на одного пользователя.
             user_usage_query = select(func.count(PromocodeUsageORM.id)).where(
                 PromocodeUsageORM.promocode_id == promocode_id_value,
                 PromocodeUsageORM.user_id == user_id,
@@ -160,7 +160,7 @@ class Promocode(BaseRuntime):
             if int((await session.execute(user_usage_query)).scalar_one()) >= discount.max_usage_per_user:
                 raise self.get_bad_request("Promocode usage limit for user reached.")
         if discount.interval_days is not None:
-            # РќРµРєРѕС‚РѕСЂС‹Рµ РїСЂРѕРјРѕРєРѕРґС‹ РјРѕР¶РЅРѕ РїСЂРёРјРµРЅСЏС‚СЊ РїРѕРІС‚РѕСЂРЅРѕ С‚РѕР»СЊРєРѕ СЃРїСѓСЃС‚СЏ РїР°СѓР·Сѓ.
+            # Некоторые промокоды можно применять повторно только спустя паузу.
             last_usage_query = (
                 select(PromocodeUsageORM).where(
                     PromocodeUsageORM.promocode_id == promocode_id_value,

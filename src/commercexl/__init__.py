@@ -20,7 +20,7 @@ from commercexl.models import (
     PromocodeORM,
     PromocodeProductDiscountORM,
     PromocodeUsageORM,
-    UserBalanceORM,
+    UserCreditsBalanceORM,
 )
 from commercexl.models.orm_base import CommerceBase
 from commercexl.module import (
@@ -94,7 +94,7 @@ __all__ = (
     "PromocodeORM",
     "PromocodeProductDiscountORM",
     "PromocodeUsageORM",
-    "UserBalanceORM",
+    "UserCreditsBalanceORM",
     "create_router",
     "get_commerce",
     "get_default_commerce_module",

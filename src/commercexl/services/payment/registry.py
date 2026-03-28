@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 
 class PaymentRegistry:
-    """РҐСЂР°РЅРёС‚ СЃРµСЂРІРёСЃС‹ РѕРїР»Р°С‚ Рё Р±С‹СЃС‚СЂРѕ РЅР°С…РѕРґРёС‚ РЅСѓР¶РЅС‹Р№ РїРѕ `payment_system` РёР»Рё `payment.kind`."""
+    """Хранит сервисы оплат и быстро находит нужный по `payment_system` или `payment.kind`."""
 
     def __init__(
             self,

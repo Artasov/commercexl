@@ -15,7 +15,7 @@ from commercexl.models import (
     OrderORM,
     ProductORM,
     ProductPriceORM,
-    UserBalanceORM,
+    UserCreditsBalanceORM,
 )
 from commercexl.module import get_default_commerce_module
 from commercexl.services.base_config import BaseConfig
@@ -24,7 +24,7 @@ from commercexl.services.products.registry import Registry
 
 
 class BaseRuntime:
-    """РћР±С‰Р°СЏ РёРЅС„СЂР°СЃС‚СЂСѓРєС‚СѓСЂР° `commerce`: РєРѕРЅС„РёРі, registry, lookup Р·Р°РєР°Р·РѕРІ Рё Р±Р°Р·РѕРІС‹Рµ РїСЂРѕРІРµСЂРєРё."""
+    """Общая инфраструктура `commerce`: конфиг, registry, lookup заказов и базовые проверки."""
 
     config_class = BaseConfig
 
@@ -85,12 +85,12 @@ class BaseRuntime:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field_name} is invalid.") from exc
 
     @staticmethod
-    async def get_or_create_balance(session: AsyncSession, user_id: int) -> UserBalanceORM:
-        query = select(UserBalanceORM).where(UserBalanceORM.user_id == user_id)
+    async def get_or_create_balance(session: AsyncSession, user_id: int) -> UserCreditsBalanceORM:
+        query = select(UserCreditsBalanceORM).where(UserCreditsBalanceORM.user_id == user_id)
         balance = (await session.execute(query)).scalar_one_or_none()
         if balance is None:
             now = datetime.now(UTC)
-            balance = UserBalanceORM(user_id=user_id, amount=Decimal("0"), created_at=now, updated_at=now)
+            balance = UserCreditsBalanceORM(user_id=user_id, amount=Decimal("0"), created_at=now, updated_at=now)
             session.add(balance)
             await session.flush()
         return balance

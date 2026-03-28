@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class AbstractOrderItemService(ABC):
-    """Р‘Р°Р·РѕРІС‹Р№ СЃРµСЂРІРёСЃ РѕРґРЅРѕР№ РїРѕР·РёС†РёРё Р·Р°РєР°Р·Р°."""
+    """Базовый сервис одной позиции заказа."""
 
     def __init__(
             self,
@@ -118,7 +118,7 @@ class AbstractOrderItemService(ABC):
 
 
 class DefaultOrderItemService(AbstractOrderItemService):
-    """Р‘Р°Р·РѕРІС‹Р№ item-service Р±РµР· СЃРІРѕРµР№ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕР№ Р»РѕРіРёРєРё."""
+    """Базовый item-service без своей дополнительной логики."""
 
     pass
 

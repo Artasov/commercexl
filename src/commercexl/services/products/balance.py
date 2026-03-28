@@ -12,7 +12,7 @@ from commercexl.services.products.base import AbstractProductService
 
 
 class BalanceOrderItemService(AbstractOrderItemService):
-    """РЎРµСЂРІРёСЃ РїРѕР·РёС†РёРё РїРѕРїРѕР»РЅРµРЅРёСЏ Р±Р°Р»Р°РЅСЃР°."""
+    """Сервис позиции пополнения баланса."""
 
     async def create_item_record(self, payload: dict[str, Any], amount: Decimal) -> BalanceOrderItemORM:
         _ = payload

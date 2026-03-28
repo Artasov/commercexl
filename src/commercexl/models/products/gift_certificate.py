@@ -18,7 +18,7 @@ class GiftCertificateORM(CommerceBase):
     `product_id` это целевой продукт, эффект которого будет выдан по ключу.
     """
 
-    __tablename__ = "commerce_gift_certificate"
+    __tablename__ = "commerce_gift_certificate_product"
 
     product_ptr_id: Mapped[int] = mapped_column(ForeignKey(ProductORM.id), primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey(ProductORM.id), nullable=False)
@@ -50,11 +50,11 @@ class GiftCertificateUsageORM(CommerceBase):
     )
 
     id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    user_id: Mapped[int] = mapped_column(nullable=False)
     order_item_id: Mapped[int] = mapped_column(
         ForeignKey("commerce_gift_certificate_order_item.order_item_id"), nullable=False, unique=True,
     )
-    user_id: Mapped[int] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 __all__ = (
