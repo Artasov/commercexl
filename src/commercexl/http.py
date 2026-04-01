@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -11,12 +11,15 @@ from commercexl.dto import CommerceUserActorDTO, CreateOrderDTO, CreateOrderIdOn
 from commercexl.http_common import get_base_url, load_order_payload
 from commercexl.models import EmployeeAvailabilityIntervalORM
 from commercexl.schemas import (
+    ActivateGiftCertificateRequest,
     CreateOrderIdOnlyResponse,
     CreateOrderRequest,
     CreateOrderResponse,
     EmployeeAvailabilityRequest,
     EmployeeAvailabilityResponse,
     EmployeeAvailabilityUpdateRequest,
+    GiftCertificateActivateResponse,
+    GiftCertificateResponse,
     InitPaymentRequest,
     PaymentResponse,
     PaymentTypesResponse,
@@ -27,6 +30,7 @@ from commercexl.schemas import (
     UserOrderResponse,
 )
 from commercexl.services.employee.employee import Employee
+from commercexl.services.products.gift_certificate import GiftCertificate
 from commercexl.services.promocode.base import Promocode
 
 UserObject = Any
@@ -83,6 +87,40 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
     @router.get("/products/", response_model=list[ProductResponse], tags=["Commerce / Products"])
     async def list_products(session: AsyncSession = Depends(config.get_db_session_dependency)):
         return await config.get_commerce_module().create_product_serializer().list_products(session)
+
+    @router.get(
+        "/gift-certificates/",
+        response_model=list[GiftCertificateResponse],
+        tags=["Commerce / Gift Certificates"],
+    )
+    async def list_gift_certificates(session: AsyncSession = Depends(config.get_db_session_dependency)):
+        return await GiftCertificate(config.get_commerce_module()).list(session)
+
+    @router.get(
+        "/gift-certificates/{product_id}/",
+        response_model=GiftCertificateResponse,
+        tags=["Commerce / Gift Certificates"],
+    )
+    async def gift_certificate_detail(
+            product_id: int,
+            session: AsyncSession = Depends(config.get_db_session_dependency),
+    ):
+        return await GiftCertificate(config.get_commerce_module()).get(session, product_id)
+
+    @router.post(
+        "/gift-certificate/activate/",
+        response_model=GiftCertificateActivateResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["Commerce / Gift Certificates"],
+    )
+    async def activate_gift_certificate(
+            payload: ActivateGiftCertificateRequest,
+            session: AsyncSession = Depends(config.get_db_session_dependency),
+            user: UserObject = Depends(config.get_current_user_dependency),
+    ) -> GiftCertificateActivateResponse:
+        await GiftCertificate(config.get_commerce_module()).activate(session, config.get_user_id(user), payload.key)
+        await session.commit()
+        return GiftCertificateActivateResponse(detail="Activated.")
 
     @router.get("/payment/types/", response_model=PaymentTypesResponse, tags=["Commerce / Products"])
     async def payment_types(_: UserObject = Depends(config.get_current_user_dependency)):
@@ -197,7 +235,11 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
         await session.commit()
         return True
 
-    @router.post("/orders/{order_id}/init/{init_payment}/", response_model=UserOrderResponse, tags=["Commerce / Orders"])
+    @router.post(
+        "/orders/{order_id}/init/{init_payment}/",
+        response_model=UserOrderResponse,
+        tags=["Commerce / Orders"],
+    )
     async def order_init(
             order_id: str,
             init_payment: int,
@@ -250,7 +292,11 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
             session, config.get_user_id(user), payload.promocode, payload.product, payload.currency,
         )
 
-    @router.get("/employee/availability/", response_model=list[EmployeeAvailabilityResponse], tags=["Commerce / Employees"])
+    @router.get(
+        "/employee/availability/",
+        response_model=list[EmployeeAvailabilityResponse],
+        tags=["Commerce / Employees"],
+    )
     async def list_employee_availability(
             session: AsyncSession = Depends(config.get_db_session_dependency),
             user: UserObject = Depends(config.get_current_user_dependency),

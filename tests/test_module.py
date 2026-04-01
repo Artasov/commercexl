@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -186,3 +187,104 @@ def test_http_router_factory_builds_routes_without_project_dependencies():
     assert client.get("/api/v1/payment/types/").json() == {"USD": ["handmade"]}
     assert client.get("/api/v1/products/").json() == []
     assert client.get("/api/v1/user/balance/").json() == {"balance": 42.0}
+
+
+def test_http_router_factory_supports_gift_certificate_routes(monkeypatch: pytest.MonkeyPatch):
+    class FakeGiftCertificateService:
+        def __init__(self, commerce_module) -> None:
+            _ = commerce_module
+
+        async def list(self, session):
+            _ = session
+            return [{
+                "id": 10,
+                "name": "Gift 100",
+                "pic": None,
+                "description": "Gift",
+                "short_description": "Gift",
+                "is_available": True,
+                "is_installment_available": False,
+                "kind": "gift_certificate",
+                "prices": [],
+                "product": {
+                    "id": 1,
+                    "name": "Target",
+                    "pic": None,
+                    "description": "Target",
+                    "short_description": "Target",
+                    "is_available": True,
+                    "is_installment_available": False,
+                    "kind": "software",
+                    "prices": [],
+                },
+            }]
+
+        async def get(self, session, product_id):
+            _ = session
+            return {
+                "id": product_id,
+                "name": "Gift 100",
+                "pic": None,
+                "description": "Gift",
+                "short_description": "Gift",
+                "is_available": True,
+                "is_installment_available": False,
+                "kind": "gift_certificate",
+                "prices": [],
+                "product": {
+                    "id": 1,
+                    "name": "Target",
+                    "pic": None,
+                    "description": "Target",
+                    "short_description": "Target",
+                    "is_available": True,
+                    "is_installment_available": False,
+                    "kind": "software",
+                    "prices": [],
+                },
+            }
+
+        async def activate(self, session, user_id, key):
+            _ = session
+            _ = user_id
+            _ = key
+
+    class FakeCommerceModule:
+        pass
+
+    class FakeSession:
+        async def commit(self) -> None:
+            return None
+
+    async def get_session():
+        return FakeSession()
+
+    def get_user():
+        return SimpleNamespace(id=7, is_staff=False)
+
+    monkeypatch.setattr("commercexl.http.GiftCertificate", FakeGiftCertificateService)
+
+    app = FastAPI()
+    app.include_router(
+        create_router(
+            CommerceHTTPConfig(
+                get_db_session_dependency=get_session,
+                get_current_user_dependency=get_user,
+                get_commerce_module=FakeCommerceModule,
+                build_actor=lambda user: CommerceUserActorDTO(id=user.id),
+                get_user_id=lambda user: int(user.id),
+                is_staff=lambda user: bool(user.is_staff),
+            ),
+        ),
+        prefix="/api/v1",
+    )
+    client = TestClient(app)
+
+    list_response = client.get("/api/v1/gift-certificates/")
+    detail_response = client.get("/api/v1/gift-certificates/10/")
+    activate_response = client.post("/api/v1/gift-certificate/activate/", json={"key": str(uuid4())})
+
+    assert list_response.status_code == 200
+    assert detail_response.status_code == 200
+    assert activate_response.status_code == 201
+    assert activate_response.json() == {"detail": "Activated."}
