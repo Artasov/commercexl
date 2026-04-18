@@ -13,7 +13,7 @@ CreditsConverterRule = Decimal | Callable[[Decimal], Decimal]
 class BaseConfig:
     """Конфиг по умолчанию для базового `commerce`."""
 
-    PAYMENT_SYSTEMS = {
+    PAYMENT_SYSTEMS: dict[str, tuple[str, ...]] = {
         "RUB": ("handmade", "balance"),
         "USD": ("handmade", "balance"),
     }
