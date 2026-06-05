@@ -17,13 +17,21 @@ class ProductORM(CommerceBase):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    pic: Mapped[str | None] = mapped_column(String(100))
+    pic_media_file_id: Mapped[int | None] = mapped_column(BigInteger)
     description: Mapped[str | None] = mapped_column(Text)
     short_description: Mapped[str | None] = mapped_column(Text)
     is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_installment_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    @property
+    def pic(self) -> None:
+        return None
+
+    @pic.setter
+    def pic(self, _value: str | None) -> None:
+        return None
 
 
 class ProductPriceORM(CommerceBase):
@@ -40,4 +48,3 @@ class ProductPriceORM(CommerceBase):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     exponent: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     offset: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
-

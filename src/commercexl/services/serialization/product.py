@@ -7,7 +7,6 @@ from commercexl.dto import ProductDTO, ProductPriceDTO
 from commercexl.models.base import ProductORM, ProductPriceORM
 from commercexl.models.products.balance import BalanceProductORM
 from commercexl.services.base_runtime import BaseRuntime
-from commercexl.utils import build_media_url
 
 
 class ProductSerializer(BaseRuntime):
@@ -30,8 +29,7 @@ class ProductSerializer(BaseRuntime):
         products = list((await session.execute(query)).scalars())
         return [await self.serialize_product(session, product) for product in products]
 
-    @staticmethod
-    async def serialize_product(session: AsyncSession, product: ProductORM) -> ProductDTO:
+    async def serialize_product(self, session: AsyncSession, product: ProductORM) -> ProductDTO:
         prices_query = select(ProductPriceORM).where(ProductPriceORM.product_id == product.id).order_by(
             ProductPriceORM.id.asc(),
         )
@@ -39,7 +37,7 @@ class ProductSerializer(BaseRuntime):
         return ProductDTO(
             id=product.id,
             name=product.name,
-            pic=build_media_url(None, product.pic),
+            pic=await self.get_product_pic(session, product),
             description=product.description,
             short_description=product.short_description,
             is_available=product.is_available,
@@ -57,5 +55,10 @@ class ProductSerializer(BaseRuntime):
                 for price in prices
             ],
         )
+
+    async def get_product_pic(self, session: AsyncSession, product: ProductORM) -> str | None:
+        _ = session
+        _ = product
+        return None
 
 
