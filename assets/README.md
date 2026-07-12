@@ -10,3 +10,8 @@ the use does not imply sponsorship, endorsement, official status, or affiliation
 modification, redistribution, or use in the branding of another product requires prior permission.
 
 See the repository's `TRADEMARKS.md` for the general brand-use policy.
+
+## Banner files
+
+- `orcestr-banner.png` is the original lossless generated asset.
+- `orcestr-banner.webp` is the optimized repository README version.
