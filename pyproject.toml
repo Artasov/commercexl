@@ -8,10 +8,10 @@ dynamic = ["version"]
 description = "Composable commerce core for products, order items, and payments."
 readme = "README.md"
 requires-python = ">=3.12"
-license = "MIT"
-license-files = ["LICENSE"]
+license = "MPL-2.0"
+license-files = ["LICENSE", "NOTICE", "TRADEMARKS.md"]
 authors = [
-    { name = "xlartas" },
+    { name = "Artasov" },
 ]
 urls = { Homepage = "https://github.com/Artasov/commercexl", Repository = "https://github.com/Artasov/commercexl", Issues = "https://github.com/Artasov/commercexl/issues" }
 keywords = [

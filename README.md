@@ -1,5 +1,7 @@
 # commercexl
 
+[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](./LICENSE)
+
 `commercexl` is a reusable commerce core for:
 
 - product catalog records
@@ -108,3 +110,9 @@ target_metadata = [
 ```bash
 pytest
 ```
+
+## License
+
+Licensed under the [Mozilla Public License 2.0](./LICENSE). Commercial use is permitted; changes
+to MPL-covered files remain subject to the MPL. See [NOTICE](./NOTICE) and
+[TRADEMARKS.md](./TRADEMARKS.md).

@@ -1,4 +1,6 @@
 include README.md
 include LICENSE
+include NOTICE
+include TRADEMARKS.md
 recursive-include src/commercexl *.md
 recursive-include src/commercexl *.typed
