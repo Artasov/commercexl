@@ -27,7 +27,7 @@ from commercexl.services.idempotency import Idempotency
 
 
 def test_public_provider_contract_imports_are_stable():
-    assert __version__ == "0.3.0"
+    assert __version__ == "0.3.1"
     assert CommerceBase is not None
     assert AbstractPaymentService is not None
     assert PaymentCreateContext is not None
@@ -128,6 +128,11 @@ def test_payment_state_terminal_and_active_slot_contract_is_coherent():
 
     for state in PaymentState:
         assert state.occupies_active_slot is not state.is_terminal
+
+
+def test_provisional_confirmation_can_expire_before_final_settlement():
+    assert PaymentStateMachine.can_transition(PaymentState.CONFIRMED, PaymentState.EXPIRED)
+    assert not PaymentStateMachine.can_transition(PaymentState.CONFIRMED, PaymentState.CANCELLED)
 
 
 def test_canonical_models_have_no_legacy_flags_or_persisted_checkout_capability():

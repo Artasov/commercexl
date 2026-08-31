@@ -25,7 +25,7 @@ sessions, users, authentication, CSRF policy, migrations and provider-specific c
 | Item | Value |
 | --- | --- |
 | Package | `commercexl` |
-| Version | `0.3.0` |
+| Version | `0.3.1` |
 | Status | Beta, breaking from 0.2 |
 | Runtime | Python 3.12+ |
 | Frameworks | FastAPI, SQLAlchemy 2, Pydantic 2 |
