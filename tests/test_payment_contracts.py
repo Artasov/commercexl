@@ -27,7 +27,7 @@ from commercexl.services.idempotency import Idempotency
 
 
 def test_public_provider_contract_imports_are_stable():
-    assert __version__ == "0.3.1"
+    assert __version__ == "0.3.2"
     assert CommerceBase is not None
     assert AbstractPaymentService is not None
     assert PaymentCreateContext is not None
@@ -41,10 +41,11 @@ def test_money_contract_accepts_decimal_string_and_never_serializes_float():
     price = ProductPriceDTO(
         id=1,
         product=2,
-        currency="USD",
+        currency="ORCESTR",
         amount=Decimal("123.450000"),
     )
 
+    assert price.currency == "ORCESTR"
     assert price.model_dump(mode="json")["amount"] == "123.45"
     assert Money.parse("0.000001") == Decimal("0.000001")
     with pytest.raises(ValueError, match="decimal string"):

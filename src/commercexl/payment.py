@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 from commercexl.dto.actor import CommerceUserActorDTO
+from commercexl.money import MoneyAmount
 
 if TYPE_CHECKING:
     from commercexl.models import OrderORM, PaymentORM
@@ -187,8 +188,10 @@ class PaymentOption(BaseModel):
 
 
 class PaymentOptionDTO(PaymentOption):
-    """Публичный вариант оплаты с проверенной identity провайдера."""
+    """Публичный вариант оплаты со снимком заказа и identity провайдера."""
 
+    amount: MoneyAmount
+    currency: str
     payment_system: str
     provider_kind: str
 

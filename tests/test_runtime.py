@@ -63,6 +63,10 @@ class DemoBalanceConfig(DemoConfig):
     PAYMENT_SYSTEMS = {"USD": ("balance",)}
 
 
+class AlternateCurrencyConfig(DemoConfig):
+    PAYMENT_SYSTEMS = {"ORCESTR": ("handmade",)}
+
+
 class FailingPaymentConfig(DemoConfig):
     PAYMENT_SYSTEMS = {"USD": ("failing",)}
 
@@ -140,7 +144,11 @@ class DemoProductService(AbstractProductService[DemoItemORM]):
             item_record.changed_at = now
 
 
-def create_demo_commerce(*, balance: bool = False) -> CommerceModule:
+def create_demo_commerce(
+        *,
+        balance: bool = False,
+        config_class: type[BaseConfig] | None = None,
+) -> CommerceModule:
     service = BalancePaymentService if balance else HandMadePaymentService
     registration = PaymentProviderRegistration(
         "balance" if balance else "handmade",
@@ -148,7 +156,7 @@ def create_demo_commerce(*, balance: bool = False) -> CommerceModule:
         service,
     )
     return CommerceModule(
-        config_class=DemoBalanceConfig if balance else DemoConfig,
+        config_class=config_class or (DemoBalanceConfig if balance else DemoConfig),
         product_orders=ProductOrderConfigBuilder(
             ProductOrderConfig(DemoProductService, DemoOrderItemService),
         ),
@@ -157,7 +165,12 @@ def create_demo_commerce(*, balance: bool = False) -> CommerceModule:
     )
 
 
-async def add_demo_product(db_session, product_id: int = 1, amount: str = "15.125") -> None:
+async def add_demo_product(
+        db_session,
+        product_id: int = 1,
+        amount: str = "15.125",
+        currency: str = "USD",
+) -> None:
     now = datetime.now(UTC)
     db_session.add(
         ProductORM(
@@ -177,7 +190,7 @@ async def add_demo_product(db_session, product_id: int = 1, amount: str = "15.12
     db_session.add(
         ProductPriceORM(
             product_id=product_id,
-            currency="USD",
+            currency=currency,
             amount=Decimal(amount),
             exponent=None,
             offset=None,
@@ -186,8 +199,12 @@ async def add_demo_product(db_session, product_id: int = 1, amount: str = "15.12
     await db_session.commit()
 
 
-def order_payload(product_id: int = 1, note: str = "first") -> dict[str, object]:
-    return {"product": product_id, "note": note, "currency": "USD"}
+def order_payload(
+        product_id: int = 1,
+        note: str = "first",
+        currency: str = "USD",
+) -> dict[str, object]:
+    return {"product": product_id, "note": note, "currency": currency}
 
 
 @pytest.mark.asyncio
@@ -211,6 +228,58 @@ async def test_create_order_is_two_phase_and_idempotent(db_session):
     with pytest.raises(HTTPException) as exc_info:
         await runtime.create_order(db_session, actor, order_payload(note="changed"), "order-key")
     assert exc_info.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_order_keeps_arbitrary_currency_price_snapshot_after_catalog_update(db_session):
+    await add_demo_product(db_session, amount="125.123456", currency="ORCESTR")
+    commerce = create_demo_commerce(config_class=AlternateCurrencyConfig)
+    actor = CommerceUserActorDTO(id=7)
+    order_runtime = commerce.create_order_runtime()
+
+    created = await order_runtime.create_order(
+        db_session,
+        actor,
+        order_payload(currency="ORCESTR"),
+        "orcestr-order-key",
+    )
+    price = await db_session.scalar(
+        select(ProductPriceORM).where(
+            ProductPriceORM.product_id == 1,
+            ProductPriceORM.currency == "ORCESTR",
+        ),
+    )
+    assert price is not None
+    price.amount = Decimal("999.654321")
+    await db_session.commit()
+
+    stored_order = await order_runtime.get_order(db_session, created.id)
+    assert stored_order is not None
+    assert Decimal(stored_order.amount) == Decimal("125.123456")
+    assert stored_order.currency == "ORCESTR"
+    stored_item = await db_session.scalar(
+        select(OrderItemORM).where(OrderItemORM.order_id == created.id),
+    )
+    assert stored_item is not None
+    assert Decimal(stored_item.amount) == Decimal("125.123456")
+
+    payment_runtime = commerce.create_payment_runtime()
+    options = await payment_runtime.list_payment_options(db_session, created.id, actor)
+    assert len(options.options) == 1
+    option = options.options[0]
+    assert option.amount == Decimal("125.123456")
+    assert option.currency == "ORCESTR"
+    assert option.model_dump(mode="json")["amount"] == "125.123456"
+
+    payment = await payment_runtime.create_attempt(
+        db_session,
+        created.id,
+        option.id,
+        actor,
+        "orcestr-payment-key",
+    )
+    assert payment.amount == Decimal("125.123456")
+    assert payment.currency == "ORCESTR"
 
 
 @pytest.mark.asyncio

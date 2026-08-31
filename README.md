@@ -25,7 +25,7 @@ sessions, users, authentication, CSRF policy, migrations and provider-specific c
 | Item | Value |
 | --- | --- |
 | Package | `commercexl` |
-| Version | `0.3.1` |
+| Version | `0.3.2` |
 | Status | Beta, breaking from 0.2 |
 | Runtime | Python 3.12+ |
 | Frameworks | FastAPI, SQLAlchemy 2, Pydantic 2 |
@@ -140,6 +140,10 @@ The checkout is intentionally two-phase:
 
 Amounts are `Decimal` in Python and decimal strings in JSON. The client cannot submit the final
 payment amount, commercial currency or arbitrary provider system when creating an attempt.
+Each `PaymentOptionDTO` repeats the authoritative order-snapshot `amount` and `currency`, so a
+catalog price change after order creation cannot change the amount shown or paid for that order.
+Currency codes are host-defined strings (for example, fiat or application tokens), not a closed
+CommerceXL enum.
 
 ## Provider Contract
 
