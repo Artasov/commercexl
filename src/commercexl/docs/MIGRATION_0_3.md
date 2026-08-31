@@ -147,5 +147,6 @@ Before opening traffic, verify:
 - callback replay does not execute a product effect twice;
 - outbox rows are committed atomically and the dispatcher can retry without duplicate client state.
 
-After publishing `0.3.0`, provider add-ons should use `commercexl>=0.3,<0.4`. Do not commit a lockfile
+Provider add-ons should use `commercexl>=0.3.1,<0.4`; 0.3.1 is the minimum finalized-only payment
+baseline because it allows provisional `confirmed` attempts to expire. Do not commit a lockfile
 that resolves a local editable checkout as if it were the published artifact.

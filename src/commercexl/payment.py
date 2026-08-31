@@ -96,6 +96,7 @@ class PaymentStateMachine:
         },
         PaymentState.CONFIRMED: {
             PaymentState.PAID,
+            PaymentState.EXPIRED,
             PaymentState.FAILED,
             PaymentState.REVIEW,
         },

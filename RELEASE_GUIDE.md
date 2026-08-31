@@ -54,6 +54,7 @@ Publishing uses an OIDC token; a long-lived PyPI API token must not be added as 
 
 ## 0.3 compatibility note
 
-Provider add-ons should depend on `commercexl>=0.3,<0.4` only after `0.3.0` is published. During
-coordinated local development they may use an editable checkout or the locally built `0.3.0` wheel,
-but the committed lockfile must resolve a reproducible published artifact.
+Provider add-ons should depend on `commercexl>=0.3.1,<0.4`. Version 0.3.1 is the minimum safe
+baseline for finalized-only providers because it permits a provisional `confirmed` payment to
+expire before final settlement. During coordinated local development they may use an editable
+checkout, but the committed lockfile must resolve a reproducible published artifact.

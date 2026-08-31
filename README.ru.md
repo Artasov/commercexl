@@ -25,7 +25,7 @@ FastAPI, Pydantic 2 и SQLAlchemy 2. Host-приложение владеет DB
 | Пункт | Значение |
 | --- | --- |
 | Пакет | `commercexl` |
-| Версия | `0.3.0` |
+| Версия | `0.3.1` |
 | Статус | Beta, breaking относительно 0.2 |
 | Runtime | Python 3.12+ |
 | Frameworks | FastAPI, SQLAlchemy 2, Pydantic 2 |
