@@ -9,7 +9,7 @@ from commercexl.dto import (
     PaymentDTO,
     PaymentOptionsDTO,
 )
-from commercexl.http import CommerceHTTPConfig, create_router
+from commercexl.http import CommerceHTTPConfig, PublicProductFilter, create_router
 from commercexl.models import (
     BalanceOrderItemORM,
     BalancePaymentORM,
@@ -138,6 +138,7 @@ __all__ = (
     "ProductOrderConfig",
     "ProductOrderConfigBuilder",
     "ProductPriceORM",
+    "PublicProductFilter",
     "PromocodeORM",
     "PromocodeProductDiscountORM",
     "PromocodeUsageORM",
