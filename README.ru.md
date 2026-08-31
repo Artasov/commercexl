@@ -25,7 +25,7 @@ FastAPI, Pydantic 2 и SQLAlchemy 2. Host-приложение владеет DB
 | Пункт | Значение |
 | --- | --- |
 | Пакет | `commercexl` |
-| Версия | `0.3.2` |
+| Версия | `0.3.3` |
 | Статус | Beta, breaking относительно 0.2 |
 | Runtime | Python 3.12+ |
 | Frameworks | FastAPI, SQLAlchemy 2, Pydantic 2 |
@@ -128,6 +128,27 @@ app.include_router(
     prefix="/api/v1",
 )
 ```
+
+Опциональный hook `filter_public_products` получает активную `AsyncSession` и уже сериализованный
+`list[ProductDTO]`. Он применяется только к `GET /products/`, поэтому host может исключить из
+общего публичного каталога tenant-bound и другие управляемые host-приложением продукты, не меняя
+хранилище CommerceXL:
+
+```python
+async def filter_public_products(session, products):
+    hidden_kinds = await host_catalog.get_orchestrated_product_kinds(session)
+    return [product for product in products if product.kind not in hidden_kinds]
+
+
+CommerceHTTPConfig(
+    # ...обязательные dependencies...
+    filter_public_products=filter_public_products,
+)
+```
+
+При значении `None` endpoint, как и раньше, возвращает весь сериализованный каталог CommerceXL.
+Hook не влияет на внутренние serializers, поиск balance product, gift certificates и создание
+заказов: авторизацию checkout host по-прежнему должен проверять отдельно.
 
 Checkout намеренно разделён на две фазы:
 

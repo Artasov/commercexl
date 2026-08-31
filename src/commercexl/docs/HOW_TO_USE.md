@@ -217,6 +217,11 @@ async def commerce_actor(user=Depends(get_current_user)) -> CommerceUserActorDTO
     )
 
 
+async def filter_public_products(session, products):
+    hidden_kinds = await host_catalog.get_orchestrated_product_kinds(session)
+    return [product for product in products if product.kind not in hidden_kinds]
+
+
 router = APIRouter()
 router.include_router(
     create_router(
@@ -226,6 +231,7 @@ router.include_router(
             get_mutation_guard_dependency=check_csrf,
             get_commerce_module=lambda: commerce,
             prepare_order_payload=prepare_project_order_payload,
+            filter_public_products=filter_public_products,
         ),
     ),
 )
@@ -239,6 +245,11 @@ operations; replace it with an injected policy when host permissions are more co
 Host-orchestrated product kinds may require tenant links or purchase records. Reject those kinds in
 `prepare_order_payload` and expose them only through host domain checkout endpoints; do not allow a
 generic order endpoint to bypass their permission and linkage rules.
+
+`filter_public_products` is an optional async visibility hook for `GET /products/`. It receives the
+active `AsyncSession` and the already serialized `list[ProductDTO]`; returning a filtered list keeps
+host-orchestrated products out of the generic catalog. The default `None` preserves the complete
+catalog. The hook does not alter any internal serializer, product lookup or checkout authorization.
 
 ## 5. Use the two-phase checkout
 

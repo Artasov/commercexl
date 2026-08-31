@@ -18,6 +18,7 @@ from commercexl import (
     PaymentProviderRegistration,
     PaymentState,
     PaymentVerificationResult,
+    PublicProductFilter,
 )
 from commercexl.dto import ProductPriceDTO
 from commercexl.models import OrderORM, PaymentORM
@@ -27,7 +28,7 @@ from commercexl.services.idempotency import Idempotency
 
 
 def test_public_provider_contract_imports_are_stable():
-    assert __version__ == "0.3.2"
+    assert __version__ == "0.3.3"
     assert CommerceBase is not None
     assert AbstractPaymentService is not None
     assert PaymentCreateContext is not None
@@ -35,6 +36,7 @@ def test_public_provider_contract_imports_are_stable():
     assert PaymentOption is not None
     assert PaymentVerificationResult is not None
     assert PaymentProviderRegistration is not None
+    assert PublicProductFilter is not None
 
 
 def test_money_contract_accepts_decimal_string_and_never_serializes_float():

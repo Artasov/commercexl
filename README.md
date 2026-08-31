@@ -25,7 +25,7 @@ sessions, users, authentication, CSRF policy, migrations and provider-specific c
 | Item | Value |
 | --- | --- |
 | Package | `commercexl` |
-| Version | `0.3.2` |
+| Version | `0.3.3` |
 | Status | Beta, breaking from 0.2 |
 | Runtime | Python 3.12+ |
 | Frameworks | FastAPI, SQLAlchemy 2, Pydantic 2 |
@@ -128,6 +128,27 @@ app.include_router(
     prefix="/api/v1",
 )
 ```
+
+The optional `filter_public_products` hook receives the active `AsyncSession` and the already
+serialized `list[ProductDTO]`. It applies only to `GET /products/`, allowing a host to keep
+tenant-bound or otherwise host-orchestrated products out of the generic public catalog without
+changing CommerceXL product storage:
+
+```python
+async def filter_public_products(session, products):
+    hidden_kinds = await host_catalog.get_orchestrated_product_kinds(session)
+    return [product for product in products if product.kind not in hidden_kinds]
+
+
+CommerceHTTPConfig(
+    # ...required dependencies...
+    filter_public_products=filter_public_products,
+)
+```
+
+With the default `None`, the endpoint returns the full serialized CommerceXL catalog as before.
+The hook does not affect internal serializers, balance-product lookup, gift certificates or order
+creation; hosts must still enforce checkout authorization independently.
 
 The checkout is intentionally two-phase:
 

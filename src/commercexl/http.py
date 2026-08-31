@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from commercexl.dto import CommerceUserActorDTO, CreateOrderDTO, OrderDTO, PaymentDTO, PaymentOptionsDTO
+from commercexl.dto import CommerceUserActorDTO, CreateOrderDTO, OrderDTO, PaymentDTO, PaymentOptionsDTO, ProductDTO
 from commercexl.http_common import load_order_payload
 from commercexl.models import EmployeeAvailabilityIntervalORM
 from commercexl.payment import CheckoutAction
@@ -41,6 +41,10 @@ PrepareOrderPayload = Callable[
     [AsyncSession, CommerceUserActorDTO, dict[str, Any]],
     Awaitable[dict[str, Any]],
 ]
+PublicProductFilter = Callable[
+    [AsyncSession, list[ProductDTO]],
+    Awaitable[list[ProductDTO]],
+]
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,7 @@ class CommerceHTTPConfig:
     get_mutation_guard_dependency: Callable[..., Any]
     get_commerce_module: Callable[[], Any]
     prepare_order_payload: PrepareOrderPayload | None = None
+    filter_public_products: PublicProductFilter | None = None
 
 
 def create_router(config: CommerceHTTPConfig) -> APIRouter:
@@ -76,8 +81,11 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
         return await config.get_commerce_module().create_product_serializer().get_latest_balance_product(session)
 
     @router.get("/products/", response_model=list[ProductResponse], tags=["Commerce / Products"])
-    async def list_products(session: AsyncSession = Depends(config.get_db_session_dependency)):
-        return await config.get_commerce_module().create_product_serializer().list_products(session)
+    async def list_products(session: AsyncSession = Depends(config.get_db_session_dependency)) -> list[ProductDTO]:
+        products = await config.get_commerce_module().create_product_serializer().list_products(session)
+        if config.filter_public_products is not None:
+            return await config.filter_public_products(session, products)
+        return products
 
     @router.get(
         "/gift-certificates/",
