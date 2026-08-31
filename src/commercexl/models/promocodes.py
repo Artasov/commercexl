@@ -1,12 +1,23 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, Table, \
-    UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    SmallInteger,
+    String,
+    Table,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
+from commercexl.money import Money
 from commercexl.models.orm_base import CommerceBase
 
 commerce_promocode_discounts = Table(
@@ -37,18 +48,25 @@ commerce_promocodeproductdiscount_specific_users = Table(
 
 
 class PromocodeProductDiscountORM(CommerceBase):
+    """Денежная или процентная скидка продукта в одной валюте."""
+
     __tablename__ = "commerce_promocodeproductdiscount"
+    __table_args__ = (
+        CheckConstraint("amount >= 0", name="commerce_promocode_discount_amount_nonnegative"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("commerce_product.id"), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Money.sql_type(), nullable=False)
+    currency: Mapped[str] = mapped_column(String(Money.currency_code_length), nullable=False)
     max_usage: Mapped[int | None] = mapped_column(SmallInteger)
     max_usage_per_user: Mapped[int | None] = mapped_column(SmallInteger)
     interval_days: Mapped[int | None] = mapped_column(SmallInteger)
 
 
 class PromocodeORM(CommerceBase):
+    """Промокод с периодом действия и набором скидок."""
+
     __tablename__ = "commerce_promocode"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -63,11 +81,15 @@ class PromocodeORM(CommerceBase):
 
 
 class PromocodeUsageORM(CommerceBase):
+    """Фиксирует одно использование промокода пользователем."""
+
     __tablename__ = "commerce_promocodeusage"
 
-    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     user_id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), nullable=False)
     promocode_id: Mapped[int] = mapped_column(ForeignKey("commerce_promocode.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-

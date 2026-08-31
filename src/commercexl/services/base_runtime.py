@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -9,22 +9,17 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from commercexl.dto import PaymentTypesDTO, PromocodeDTO
-from commercexl.models import (
-    OrderItemORM,
-    OrderORM,
-    ProductORM,
-    ProductPriceORM,
-    UserCreditsBalanceORM,
-)
+from commercexl.dto import CommerceUserActorDTO, PromocodeDTO
+from commercexl.models import OrderItemORM, OrderORM, ProductORM, ProductPriceORM, UserCreditsBalanceORM
 from commercexl.module import get_default_commerce_module
+from commercexl.services.access import OrderAccessAction
 from commercexl.services.base_config import BaseConfig
 from commercexl.services.payment.registry import PaymentRegistry
 from commercexl.services.products.registry import Registry
 
 
 class BaseRuntime:
-    """Общая инфраструктура `commerce`: конфиг, registry, lookup заказов и базовые проверки."""
+    """Общая инфраструктура commerce: registry, lookups и access policy."""
 
     config_class = BaseConfig
 
@@ -44,7 +39,7 @@ class BaseRuntime:
 
     def create_payment_registry(self) -> PaymentRegistry:
         self.commerce_module.validate_payment_systems()
-        return PaymentRegistry(self, service_classes=self.commerce_module.payments.service_classes)
+        return PaymentRegistry(self, registrations=self.commerce_module.payments.registrations)
 
     @property
     def product_registry(self) -> Registry:
@@ -78,6 +73,10 @@ class BaseRuntime:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
     @staticmethod
+    def get_conflict(detail: str) -> HTTPException:
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+    @staticmethod
     def parse_int(value: Any, *, field_name: str) -> int:
         try:
             return int(value)
@@ -90,18 +89,46 @@ class BaseRuntime:
         balance = (await session.execute(query)).scalar_one_or_none()
         if balance is None:
             now = datetime.now(UTC)
-            balance = UserCreditsBalanceORM(user_id=user_id, amount=Decimal("0"), created_at=now, updated_at=now)
+            balance = UserCreditsBalanceORM(
+                user_id=user_id,
+                amount=Decimal("0"),
+                created_at=now,
+                updated_at=now,
+            )
             session.add(balance)
             await session.flush()
         return balance
 
     @staticmethod
-    async def get_order(session: AsyncSession, order_id: str | UUID) -> OrderORM | None:
+    async def get_balance(session: AsyncSession, user_id: int) -> UserCreditsBalanceORM | None:
+        query = select(UserCreditsBalanceORM).where(UserCreditsBalanceORM.user_id == user_id)
+        return (await session.execute(query)).scalar_one_or_none()
+
+    @staticmethod
+    def normalize_order_id(order_id: str | UUID) -> UUID | None:
         try:
-            normalized_id = order_id if isinstance(order_id, UUID) else UUID(str(order_id))
+            return order_id if isinstance(order_id, UUID) else UUID(str(order_id))
         except (TypeError, ValueError):
             return None
-        return await session.get(OrderORM, normalized_id)
+
+    @classmethod
+    async def get_order(cls, session: AsyncSession, order_id: str | UUID) -> OrderORM | None:
+        normalized_id = cls.normalize_order_id(order_id)
+        return await session.get(OrderORM, normalized_id) if normalized_id is not None else None
+
+    @classmethod
+    async def get_order_for_update(cls, session: AsyncSession, order_id: str | UUID) -> OrderORM | None:
+        """Блокирует заказ первым во всех payment mutation flows."""
+        normalized_id = cls.normalize_order_id(order_id)
+        if normalized_id is None:
+            return None
+        query = (
+            select(OrderORM)
+            .where(OrderORM.id == normalized_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return (await session.execute(query)).scalar_one_or_none()
 
     async def refresh_order(self, session: AsyncSession, order_id: str | UUID) -> OrderORM:
         order = await self.get_order(session, order_id)
@@ -110,16 +137,33 @@ class BaseRuntime:
         await session.refresh(order)
         return order
 
+    async def check_order_access(
+            self,
+            session: AsyncSession,
+            actor: CommerceUserActorDTO,
+            order: OrderORM,
+            action: OrderAccessAction,
+    ) -> None:
+        """Скрывает чужой заказ за 404 независимо от способа вызова runtime."""
+        is_allowed = await self.commerce_module.order_access_policy.is_allowed(
+            session,
+            actor,
+            order,
+            action,
+        )
+        if not is_allowed:
+            raise self.get_not_found("Order not found.")
+
     def get_available_payment_systems(self, currency: str) -> tuple[str, ...]:
         config = self.get_config()
         normalized_currency = config.normalize_currency(currency)
         payment_systems = config.get_payment_systems_map().get(normalized_currency)
         if payment_systems is None:
             raise self.get_bad_request("Currency not supported.")
-        return payment_systems
+        return tuple(PaymentRegistry.normalize(system) for system in payment_systems)
 
     def validate_payment_system(self, currency: str, payment_system: str) -> None:
-        if payment_system not in self.get_available_payment_systems(currency):
+        if PaymentRegistry.normalize(payment_system) not in self.get_available_payment_systems(currency):
             raise self.get_bad_request("Currency not supported for payment system.")
 
     def validate_balance_top_up_amount(self, currency: str, requested_amount: Decimal) -> None:
@@ -129,12 +173,6 @@ class BaseRuntime:
             raise self.get_bad_request(f"Minimum amount for {currency} is {min_amount}")
         if requested_amount > config.MAX_TOP_UP_AMOUNT:
             raise self.get_bad_request(f"Maximum amount is {config.MAX_TOP_UP_AMOUNT}")
-
-    async def get_payment_types(self) -> PaymentTypesDTO:
-        config = self.get_config()
-        return PaymentTypesDTO.model_validate(
-            {currency: list(payment_systems) for currency, payment_systems in config.get_payment_systems_map().items()},
-        )
 
     @staticmethod
     async def get_price_row(session: AsyncSession, product_id: int, currency: str) -> ProductPriceORM | None:
@@ -146,7 +184,7 @@ class BaseRuntime:
 
     async def get_product_price(self, session: AsyncSession, product_id: int, currency: str) -> Decimal | None:
         price = await self.get_price_row(session, product_id, currency)
-        return Decimal(str(price.amount)) if price is not None else None
+        return Decimal(price.amount) if price is not None else None
 
     async def get_product_kind(self, session: AsyncSession, product_id: int) -> str | None:
         product = await session.get(ProductORM, product_id)
@@ -177,14 +215,9 @@ class BaseRuntime:
         if handler is None:
             return None, None, None
         item_record = await handler.get_item_record(session, order_item.id)
-        item_service = handler.create_order_item_service(
-            await session.get(OrderORM, order_item.order_id),
-            order_item,
-            item_record,
-        ).bind(session)
+        order = await session.get(OrderORM, order_item.order_id)
+        item_service = handler.create_order_item_service(order, order_item, item_record).bind(session)
         return handler, item_record, item_service
 
     async def serialize_promocode(self, session: AsyncSession, promocode_id: int | None) -> PromocodeDTO | None:
         raise NotImplementedError
-
-

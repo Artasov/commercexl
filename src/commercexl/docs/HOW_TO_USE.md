@@ -1,10 +1,9 @@
-# HOW_TO_USE
+# CommerceXL integration guide (0.3)
 
-## 1. Create `CommerceModule`
+## 1. Assemble `CommerceModule`
 
 ```python
 from decimal import Decimal
-from functools import lru_cache
 
 from commercexl import (
     BalanceOrderItemService,
@@ -14,52 +13,29 @@ from commercexl import (
     CommerceModule,
     DefaultOrderItemService,
     HandMadePaymentService,
-    OrderRuntimeConfigBuilder,
     PaymentConfigBuilder,
+    PaymentProviderRegistration,
     ProductOrderConfig,
     ProductOrderConfigBuilder,
 )
-from my_app.services.commerce import (
-    MyOrderItemService,
-    MyProductService,
-    MySimpleProductService,
-)
-from my_app.services.payments import MyPaymentService
-
-
-@lru_cache(maxsize=1)
-def calc_sol_min_top_up() -> Decimal:
-    return Decimal("0.01")
-
-
-@lru_cache(maxsize=1)
-def calc_sol_credits(amount: Decimal) -> Decimal:
-    return amount * Decimal("1500000")
 
 
 class ProjectCommerceConfig(BaseConfig):
     PAYMENT_SYSTEMS = {
-        "RUB": (
-            HandMadePaymentService.payment_system,
-            BalancePaymentService.payment_system,
-        ),
-        "USD": (
-            HandMadePaymentService.payment_system,
-            BalancePaymentService.payment_system,
-        ),
-        "SOL": ("solana",),
+        "RUB": ("handmade", "balance"),
+        "USD": ("handmade", "balance"),
+        "SOL": ("project_provider",),
     }
     MIN_TOP_UP_AMOUNTS = {
         "RUB": Decimal("50"),
         "USD": Decimal("1"),
-        "SOL": calc_sol_min_top_up,
+        "SOL": Decimal("0.01"),
     }
     CREDITS_CONVERTERS = {
         "RUB": Decimal("110"),
         "USD": Decimal("10000"),
-        "SOL": calc_sol_credits,
+        "SOL": lambda amount: amount * Decimal("1500000"),
     }
-    MAX_TOP_UP_AMOUNT = Decimal("1000000")
 
 
 commerce = CommerceModule(
@@ -69,43 +45,38 @@ commerce = CommerceModule(
         ProductOrderConfig(MyProductService, MyOrderItemService),
         ProductOrderConfig(MySimpleProductService, DefaultOrderItemService),
     ),
-    order_runtime=OrderRuntimeConfigBuilder(),
     payments=PaymentConfigBuilder(
-        HandMadePaymentService,
-        BalancePaymentService,
-        MyPaymentService,
+        PaymentProviderRegistration("handmade", "handmade", HandMadePaymentService),
+        PaymentProviderRegistration("balance", "balance", BalancePaymentService),
+        PaymentProviderRegistration("project_provider", "gateway", create_gateway_service),
     ),
+    order_access_policy=ProjectOrderAccessPolicy(),
+    public_base_url="https://commerce.example.com",
 )
 ```
 
-Important:
+`PAYMENT_SYSTEMS` is only a coarse allowlist by commercial currency. The provider's
+`list_options(...)` method decides which concrete options are currently available for an actor and
+order. Provider systems and identities are normalized and must be unique.
 
-- `config_class` is a class, not an instance.
-- `PAYMENT_SYSTEMS` must contain at least one currency.
-- `MIN_TOP_UP_AMOUNTS` accepts `Decimal` or `() -> Decimal`.
-- `CREDITS_CONVERTERS` accepts `Decimal` or `(amount: Decimal) -> Decimal`.
-- expensive converter functions should be cached.
+`public_base_url` is explicit trusted configuration. Do not derive it from `Host`, forwarded headers
+or an incoming request URL.
 
-## 2. Add a product
+## 2. Define product and order-item services
 
 ```python
 from decimal import Decimal
 
-from commercexl import (
-    AbstractOrderItemService,
-    AbstractProductService,
-    DefaultOrderItemService,
-    DefaultProductService,
-)
+from commercexl import AbstractOrderItemService, AbstractProductService, DefaultOrderItemService
 
 
 class MyOrderItemService(AbstractOrderItemService):
     async def create_item_record(self, payload, amount) -> MyOrderItemORM:
-        _ = amount
-        return MyOrderItemORM(
+        self.item_record = MyOrderItemORM(
             order_item_id=self.order_item.id,
             my_field=payload["my_field"],
         )
+        return self.item_record
 
     async def calc_amount(self) -> Decimal:
         return Decimal("10")
@@ -120,7 +91,7 @@ class MyProductService(AbstractProductService[MyOrderItemORM]):
     default_order_item_service_class = MyOrderItemService
 
 
-class MySimpleProductService(DefaultProductService[None]):
+class MySimpleProductService(AbstractProductService[None]):
     kind = "my_simple_product"
     product_kinds = ("mysimpleproduct",)
     item_kinds = ("mysimpleproductitem",)
@@ -128,42 +99,118 @@ class MySimpleProductService(DefaultProductService[None]):
     default_order_item_service_class = DefaultOrderItemService
 ```
 
-Short version:
+Prices and balances use `Decimal` in Python and `Numeric(20, 6)` in the built-in models. Public JSON
+uses decimal strings. A provider-specific raw blockchain amount belongs in its child model as an
+integer/base-unit value, not in the CommerceXL commercial `currency` or `amount` fields.
 
-- `AbstractProductService` describes the product kind.
-- `AbstractOrderItemService` describes one order item flow for that product.
-- if a product has no extra item record, `item_model = None` is enough.
-
-## 3. Add a payment service
+## 3. Implement a payment provider
 
 ```python
-from commercexl import AbstractCallbackPaymentService, AbstractPaymentService, OrderDTO, PaymentORM
+from commercexl import (
+    AbstractCallbackPaymentService,
+    PaymentCreateResult,
+    PaymentOption,
+    PaymentState,
+    PaymentVerificationResult,
+)
 
 
-class MyPaymentService(AbstractPaymentService):
-    payment_system = "my_payment"
-    payment_kind = "mypayment"
+class GatewayPaymentService(AbstractCallbackPaymentService):
+    def __init__(self, commerce, registration, gateway, clock) -> None:
+        super().__init__(commerce, registration)
+        self.gateway = gateway
+        self.clock = clock
 
-    async def create(self, session, order, amount, request_base_url) -> PaymentORM: ...
-    async def is_paid(self, session, payment_id) -> bool: ...
+    async def list_options(self, session, order, actor):
+        if not await self.gateway.is_available(session, order, actor):
+            return ()
+        return (
+            PaymentOption(
+                id="gateway:default",
+                label="Gateway",
+                action_kind="redirect",
+            ),
+        )
+
+    async def create(self, session, context):
+        intent = await self.gateway.create_intent(
+            session=session,
+            payment=context.payment,
+            option=context.option,
+            idempotency_key=context.idempotency_key,
+        )
+        session.add(GatewayPaymentORM(payment_ptr_id=context.payment.id, intent_id=intent.id))
+        action = await self.gateway.issue_action(intent, context.public_base_url)
+        return PaymentCreateResult(action=action)
+
+    async def get_action(self, session, payment):
+        intent = await self.gateway.get_intent(session, payment.id)
+        return await self.gateway.issue_action(intent, self.commerce.commerce_module.public_base_url)
+
+    async def cancel(self, session, payment):
+        evidence = await self.gateway.cancel(payment.public_id)
+        return PaymentVerificationResult(
+            state=PaymentState.CANCELLED,
+            reason_code=evidence.reason_code,
+        )
+
+    async def refund(self, session, payment):
+        refund = await self.gateway.refund(payment.public_id)
+        return PaymentVerificationResult(
+            state=PaymentState.REFUND_PENDING,
+            reason_code=refund.reason_code,
+        )
+
+    async def verify(self, session, payment, payload):
+        evidence = await self.gateway.verify(payload)
+        return PaymentVerificationResult(
+            state=evidence.state,
+            evidence_key=evidence.unique_key,
+            reason_code=evidence.reason_code,
+            evidence=evidence.safe_metadata,
+        )
 
 
-class MyCallbackPaymentService(AbstractCallbackPaymentService):
-    payment_system = "my_payment"
-    payment_kind = "mypayment"
-
-    async def create(self, session, order, amount, request_base_url) -> PaymentORM: ...
-    async def is_paid(self, session, payment_id) -> bool: ...
-    async def confirm(self, session, data) -> OrderDTO: ...
-    async def check(self, session, data) -> OrderDTO: ...
+def create_gateway_service(commerce, registration):
+    return GatewayPaymentService(
+        commerce,
+        registration,
+        gateway=project_gateway,
+        clock=project_clock,
+    )
 ```
 
-## 4. Use in FastAPI
+Rules for providers:
+
+- create a child row referencing the canonical `PaymentORM`; do not create a parallel attempt;
+- do not accept the final amount, currency, arbitrary provider system or asset identity from the
+  client;
+- do not mutate `OrderORM`, execute product effects or publish network events directly;
+- return only typed checkout actions and verification results;
+- keep callback verification deterministic and claim a globally unique `evidence_key` for observed,
+  confirmed, paid and refunded results;
+- persist only safe diagnostic evidence; never put bearer capabilities, credentials or raw secrets
+  in `PaymentORM.verification_data`, logs or outbox payloads;
+- issue redirect/transaction capability values from `get_action(...)`. Core persists only action
+  kind and expiry.
+
+Provider create/cancel/refund operations must be idempotent by canonical payment identity. A DB
+exception rolls back CommerceXL state, but a remote provider side effect may already exist and must
+be recoverable by the same idempotency key.
+
+## 4. Wire authentication and HTTP
 
 ```python
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from commercexl import CommerceHTTPConfig, CommerceUserActorDTO, create_router
+
+
+async def commerce_actor(user=Depends(get_current_user)) -> CommerceUserActorDTO:
+    return CommerceUserActorDTO(
+        id=user.id,
+        permissions=frozenset(await permission_service.for_user(user.id)),
+    )
 
 
 router = APIRouter()
@@ -171,40 +218,87 @@ router.include_router(
     create_router(
         CommerceHTTPConfig(
             get_db_session_dependency=get_db_session,
-            get_current_user_dependency=get_current_user,
+            get_current_actor_dependency=commerce_actor,
+            get_mutation_guard_dependency=check_csrf,
             get_commerce_module=lambda: commerce,
-            build_actor=lambda user: CommerceUserActorDTO(id=user.id),
-            get_user_id=lambda user: int(user.id),
-            is_staff=lambda user: bool(user.is_staff),
+            prepare_order_payload=prepare_project_order_payload,
         ),
     ),
 )
 ```
 
-Add project-specific extras next to this router, not inside `commercexl` itself.
+`get_current_actor_dependency` must reject anonymous requests wherever an actor is required.
+`get_mutation_guard_dependency` is mandatory for every built-in mutation route. The default
+`OwnerOrderAccessPolicy` hides foreign orders behind 404 and grants `commerce.manage` for management
+operations; replace it with an injected policy when host permissions are more complex.
 
-## 5. Override `OrderRuntime` only if needed
+Host-orchestrated product kinds may require tenant links or purchase records. Reject those kinds in
+`prepare_order_payload` and expose them only through host domain checkout endpoints; do not allow a
+generic order endpoint to bypass their permission and linkage rules.
+
+## 5. Use the two-phase checkout
+
+Create a server-priced order:
+
+```http
+POST /orders/
+Idempotency-Key: order-01J...
+Content-Type: application/json
+
+{"product": 42, "currency": "USD"}
+```
+
+Then list options and create one attempt:
+
+```http
+GET /orders/{order_id}/payment-options/
+
+POST /orders/{order_id}/payment-attempts/
+Idempotency-Key: payment-01J...
+Content-Type: application/json
+
+{"payment_option_id": "gateway:default"}
+```
+
+The create-attempt request has no amount, currency or free-form payment system. Repeating the same
+idempotency key and fingerprint returns the same attempt; changing the payload produces `409`.
+
+Read authoritative state through `GET /payments/{payment_public_id}/`. Use
+`POST /payments/{payment_public_id}/checkout-action/` only when the UI needs a fresh action. Status
+responses do not reproduce capability URLs from storage.
+
+## 6. Apply trusted verification
+
+Callback and reconciliation routes are provider/host responsibilities. After signature and payload
+validation, load the provider child and canonical payment, call the provider verifier, then apply the
+result through core in the same DB session:
 
 ```python
-from decimal import Decimal
-
-from commercexl import OrderDTO
-from commercexl.services.order.order_runtime import OrderRuntime
-
-
-class MyOrderRuntime(OrderRuntime):
-    async def calc_order_amount(self, session, order) -> Decimal:
-        return await super().calc_order_amount(session, order)
-
-    async def init_existing_order(self, session, order, request_base_url, init_payment) -> OrderDTO:
-        return await super().init_existing_order(session, order, request_base_url, init_payment)
-
-    async def execute_order(self, session, order) -> None:
-        await super().execute_order(session, order)
-
-    async def cancel_order(self, session, order) -> None:
-        await super().cancel_order(session, order)
-
-    async def revoke_order(self, session, order) -> None:
-        await super().revoke_order(session, order)
+result = await provider.verify(session, payment, callback_payload)
+payment_dto = await commerce.create_payment_runtime().apply_verification(
+    session,
+    payment.id,
+    result,
+)
+await session.commit()
 ```
+
+`apply_verification(...)` locks order then payment, claims evidence, performs the state transition,
+executes or revokes product effects exactly once, and writes the outbox record atomically. It is a
+trusted backend API and is intentionally not exposed as a generic public HTTP route.
+
+## 7. Dispatch the transactional outbox
+
+The host owns a worker that claims pending `PaymentOutboxEventORM` rows after commit, publishes a
+minimal authenticated realtime invalidation event, and then marks each row delivered. Do not publish
+Redis/WebSocket messages inside the payment transaction. Client event handlers must re-read the
+authoritative REST state instead of trusting event payload as financial truth.
+
+The canonical client payload contains `order_public_id`, `payment_public_id`, `revision` and `state`.
+The outbox row keeps `user_id` separately as a server-side routing key.
+
+## 8. Upgrade from 0.2
+
+Do not keep both contracts. Remove the old payment URL, boolean order/payment flags, one-step order
+creation and provider class registration in the same host release. Follow
+[`MIGRATION_0_3.md`](./MIGRATION_0_3.md) for schema backfill order and endpoint mapping.

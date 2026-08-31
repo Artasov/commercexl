@@ -2,27 +2,29 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from commercexl.dto import CommerceUserActorDTO, CreateOrderDTO, CreateOrderIdOnlyDTO, OrderDTO
-from commercexl.http_common import get_base_url, load_order_payload
+from commercexl.dto import CommerceUserActorDTO, CreateOrderDTO, OrderDTO, PaymentDTO, PaymentOptionsDTO
+from commercexl.http_common import load_order_payload
 from commercexl.models import EmployeeAvailabilityIntervalORM
+from commercexl.payment import CheckoutAction
 from commercexl.schemas import (
     ActivateGiftCertificateRequest,
-    CreateOrderIdOnlyResponse,
     CreateOrderRequest,
     CreateOrderResponse,
+    CreatePaymentAttemptRequest,
     EmployeeAvailabilityRequest,
     EmployeeAvailabilityResponse,
     EmployeeAvailabilityUpdateRequest,
     GiftCertificateActivateResponse,
     GiftCertificateResponse,
-    InitPaymentRequest,
+    PaymentOptionsResponse,
     PaymentResponse,
-    PaymentTypesResponse,
     ProductResponse,
     PromocodeCheckRequest,
     PromocodeResponse,
@@ -30,37 +32,26 @@ from commercexl.schemas import (
     UserOrderResponse,
 )
 from commercexl.services.employee.employee import Employee
+from commercexl.services.access import OrderAccessAction
+from commercexl.services.base_runtime import BaseRuntime
 from commercexl.services.products.gift_certificate import GiftCertificate
 from commercexl.services.promocode.base import Promocode
 
-UserObject = Any
-PrepareOrderContext = Callable[
-    [AsyncSession, UserObject, dict[str, Any]],
-    Awaitable[tuple[CommerceUserActorDTO, dict[str, Any]]],
+PrepareOrderPayload = Callable[
+    [AsyncSession, CommerceUserActorDTO, dict[str, Any]],
+    Awaitable[dict[str, Any]],
 ]
 
 
 @dataclass(frozen=True)
 class CommerceHTTPConfig:
+    """Auth-neutral dependencies required by the CommerceXL HTTP adapter."""
+
     get_db_session_dependency: Callable[..., Any]
-    get_current_user_dependency: Callable[..., Any]
+    get_current_actor_dependency: Callable[..., Any]
+    get_mutation_guard_dependency: Callable[..., Any]
     get_commerce_module: Callable[[], Any]
-    build_actor: Callable[[UserObject], CommerceUserActorDTO]
-    get_user_id: Callable[[UserObject], int]
-    is_staff: Callable[[UserObject], bool]
-    prepare_order_context: PrepareOrderContext | None = None
-    return_debug_stub: Callable[[], bool] = lambda: False
-
-
-async def get_default_order_context(
-        session: AsyncSession,
-        user: UserObject,
-        payload: dict[str, Any],
-        *,
-        build_actor: Callable[[UserObject], CommerceUserActorDTO],
-) -> tuple[CommerceUserActorDTO, dict[str, Any]]:
-    _ = session
-    return build_actor(user), payload
+    prepare_order_payload: PrepareOrderPayload | None = None
 
 
 def create_router(config: CommerceHTTPConfig) -> APIRouter:
@@ -69,18 +60,18 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
     @router.get("/user/balance/", response_model=UserBalanceResponse, tags=["Commerce / Products"])
     async def user_balance(
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
     ):
-        balance = await config.get_commerce_module().create_base_runtime().get_or_create_balance(
-            session, config.get_user_id(user),
+        balance = await config.get_commerce_module().create_base_runtime().get_balance(
+            session,
+            actor.id,
         )
-        await session.commit()
-        return {"balance": float(balance.amount)}
+        return {"balance": Decimal(balance.amount) if balance is not None else Decimal("0")}
 
     @router.get("/balance/product/latest/", response_model=ProductResponse | None, tags=["Commerce / Products"])
     async def latest_balance_product(
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            _: UserObject = Depends(config.get_current_user_dependency),
+            _actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
     ):
         return await config.get_commerce_module().create_product_serializer().get_latest_balance_product(session)
 
@@ -116,180 +107,177 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
     async def activate_gift_certificate(
             payload: ActivateGiftCertificateRequest,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
     ) -> GiftCertificateActivateResponse:
-        await GiftCertificate(config.get_commerce_module()).activate(session, config.get_user_id(user), payload.key)
+        await GiftCertificate(config.get_commerce_module()).activate(session, actor.id, payload.key)
         await session.commit()
         return GiftCertificateActivateResponse(detail="Activated.")
 
-    @router.get("/payment/types/", response_model=PaymentTypesResponse, tags=["Commerce / Products"])
-    async def payment_types(_: UserObject = Depends(config.get_current_user_dependency)):
-        return await config.get_commerce_module().create_base_runtime().get_payment_types()
-
     @router.post(
-        "/orders/create/",
-        response_model=CreateOrderIdOnlyResponse | CreateOrderResponse | str,
+        "/orders/",
+        response_model=CreateOrderResponse,
         status_code=status.HTTP_201_CREATED,
         tags=["Commerce / Orders"],
     )
     async def create_order(
             payload: CreateOrderRequest,
-            request: Request,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
-    ) -> CreateOrderIdOnlyDTO | CreateOrderDTO | str:
-        payload_data = payload.model_dump(exclude_none=True)
-        if config.prepare_order_context is None:
-            actor, payload_data = await get_default_order_context(
-                session, user, payload_data, build_actor=config.build_actor,
-            )
-        else:
-            actor, payload_data = await config.prepare_order_context(session, user, payload_data)
-
-        order_runtime = config.get_commerce_module().create_order_runtime()
-        data = await order_runtime.create_order(session, actor, payload_data, get_base_url(request))
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
+            idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=200),
+    ) -> CreateOrderDTO:
+        payload_data = payload.model_dump(exclude_none=True, mode="python")
+        if config.prepare_order_payload is not None:
+            payload_data = await config.prepare_order_payload(session, actor, payload_data)
+        data = await config.get_commerce_module().create_order_runtime().create_order(
+            session,
+            actor,
+            payload_data,
+            idempotency_key,
+        )
         await session.commit()
-        if config.return_debug_stub():
-            return "/something-go-wrong"
         return data
 
     @router.get("/user/orders/", response_model=list[UserOrderResponse], tags=["Commerce / Orders"])
     async def user_orders(
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
     ) -> list[OrderDTO]:
         return await config.get_commerce_module().create_order_serializer().get_user_orders(
-            session, config.get_user_id(user),
+            session,
+            actor.id,
         )
 
     @router.get("/orders/{order_id}/", response_model=UserOrderResponse, tags=["Commerce / Orders"])
     async def order_detail(
-            order_id: str,
+            order_id: UUID,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
     ) -> OrderDTO:
-        order_service = config.get_commerce_module().create_order_runtime()
-        order = await order_service.get_order(session, order_id)
-        if order is None or (not config.is_staff(user) and order.user_id != config.get_user_id(user)):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
+        runtime = config.get_commerce_module().create_order_runtime()
+        order = await runtime.get_order(session, order_id)
+        if order is None:
+            raise runtime.get_not_found("Order not found.")
+        await runtime.check_order_access(session, actor, order, OrderAccessAction.VIEW)
         return await config.get_commerce_module().create_order_serializer().serialize_order(session, order)
+
+    @router.get(
+        "/orders/{order_id}/payment-options/",
+        response_model=PaymentOptionsResponse,
+        tags=["Commerce / Payments"],
+    )
+    async def payment_options(
+            order_id: UUID,
+            session: AsyncSession = Depends(config.get_db_session_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+    ) -> PaymentOptionsDTO:
+        return await config.get_commerce_module().create_payment_runtime().list_payment_options(
+            session,
+            order_id,
+            actor,
+        )
+
+    @router.post(
+        "/orders/{order_id}/payment-attempts/",
+        response_model=PaymentResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["Commerce / Payments"],
+    )
+    async def create_payment_attempt(
+            order_id: UUID,
+            payload: CreatePaymentAttemptRequest,
+            session: AsyncSession = Depends(config.get_db_session_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
+            idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=200),
+    ) -> PaymentDTO:
+        data = await config.get_commerce_module().create_payment_runtime().create_attempt(
+            session,
+            order_id,
+            payload.payment_option_id,
+            actor,
+            idempotency_key,
+        )
+        await session.commit()
+        return data
+
+    @router.get(
+        "/payments/{payment_public_id}/",
+        response_model=PaymentResponse,
+        tags=["Commerce / Payments"],
+    )
+    async def payment_status(
+            payment_public_id: UUID,
+            session: AsyncSession = Depends(config.get_db_session_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+    ) -> PaymentDTO:
+        return await config.get_commerce_module().create_payment_runtime().get_payment_status(
+            session,
+            payment_public_id,
+            actor,
+        )
+
+    @router.post(
+        "/payments/{payment_public_id}/checkout-action/",
+        response_model=CheckoutAction,
+        tags=["Commerce / Payments"],
+    )
+    async def issue_checkout_action(
+            payment_public_id: UUID,
+            session: AsyncSession = Depends(config.get_db_session_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
+    ) -> CheckoutAction:
+        action = await config.get_commerce_module().create_payment_runtime().issue_checkout_action(
+            session,
+            payment_public_id,
+            actor,
+        )
+        await session.commit()
+        return action
 
     @router.post("/orders/{order_id}/cancel/", response_model=UserOrderResponse, tags=["Commerce / Orders"])
     async def order_cancel(
-            order_id: str,
+            order_id: UUID,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
     ) -> OrderDTO:
         service = config.get_commerce_module().create_order_runtime()
-        order = await service.get_order(session, order_id)
-        if order is None or order.user_id != config.get_user_id(user):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
-        await service.cancel_order(session, order)
+        data = await service.cancel_order(session, order_id, actor)
         await session.commit()
-        return await load_order_payload(session, order_id, service)
-
-    @router.post("/orders/{order_id}/execute/", response_model=UserOrderResponse, tags=["Commerce / Orders"])
-    async def order_execute(
-            order_id: str,
-            session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
-    ) -> OrderDTO:
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        service = config.get_commerce_module().create_order_runtime()
-        order = await service.get_order(session, order_id)
-        if order is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
-        await service.execute_order(session, order)
-        await session.commit()
-        return await load_order_payload(session, order_id, service)
+        return data
 
     @router.post("/orders/{order_id}/refund/", response_model=UserOrderResponse, tags=["Commerce / Orders"])
     async def order_refund(
-            order_id: str,
+            order_id: UUID,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
     ) -> OrderDTO:
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        service = config.get_commerce_module().create_order_runtime()
-        order = await service.get_order(session, order_id)
-        if order is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
-        await service.refund_order(session, order)
+        runtime = config.get_commerce_module().create_payment_runtime()
+        await runtime.refund_order(session, order_id, actor)
         await session.commit()
-        return await load_order_payload(session, order_id, service)
-
-    @router.post("/orders/{order_id}/delete/", tags=["Commerce / Orders"])
-    async def order_delete(
-            order_id: str,
-            session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
-    ) -> bool:
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        order = await config.get_commerce_module().create_order_runtime().get_order(session, order_id)
-        if order is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
-        await session.delete(order)
-        await session.commit()
-        return True
-
-    @router.post(
-        "/orders/{order_id}/init/{init_payment}/",
-        response_model=UserOrderResponse,
-        tags=["Commerce / Orders"],
-    )
-    async def order_init(
-            order_id: str,
-            init_payment: int,
-            request: Request,
-            session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
-    ) -> OrderDTO:
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        service = config.get_commerce_module().create_order_runtime()
-        order = await service.get_order(session, order_id)
-        if order is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
-        await service.init_existing_order(session, order, get_base_url(request), bool(init_payment))
-        await session.commit()
-        return await load_order_payload(session, order_id, service)
-
-    @router.post("/orders/{order_id}/resend_payment_notification/", tags=["Commerce / Orders"])
-    async def resend_payment_notification(
-            order_id: str,
-            user: UserObject = Depends(config.get_current_user_dependency),
-    ) -> None:
-        _ = order_id
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment system not found.")
-
-    @router.post("/orders/{order_id}/init-payment/", response_model=PaymentResponse, tags=["Commerce / Payments"])
-    async def init_payment(
-            order_id: str,
-            payload: InitPaymentRequest,
-            request: Request,
-            session: AsyncSession = Depends(config.get_db_session_dependency),
-    ):
-        service = config.get_commerce_module().create_payment_runtime()
-        order = await service.get_order(session, order_id)
-        if order is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
-        data = await service.init_payment(session, order, payload.model_dump(), get_base_url(request))
-        await session.commit()
-        return data
+        return await load_order_payload(
+            session,
+            order_id,
+            config.get_commerce_module().create_order_runtime(),
+        )
 
     @router.post("/promocode/applicable/", response_model=PromocodeResponse, tags=["Commerce / Promocodes"])
     async def promocode_applicable(
             payload: PromocodeCheckRequest,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
     ):
         return await Promocode(commerce_module=config.get_commerce_module()).can_apply(
-            session, config.get_user_id(user), payload.promocode, payload.product, payload.currency,
+            session,
+            actor.id,
+            payload.promocode,
+            payload.product,
+            payload.currency,
         )
 
     @router.get(
@@ -299,23 +287,26 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
     )
     async def list_employee_availability(
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
     ):
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        return await Employee().list_employee_availability(session, config.get_user_id(user))
+        if not actor.has_permission("commerce.manage"):
+            raise BaseRuntime.get_not_found("Availability not found.")
+        return await Employee().list_employee_availability(session, actor.id)
 
-    @router.post("/employee/availability/", response_model=EmployeeAvailabilityResponse, tags=["Commerce / Employees"])
+    @router.post(
+        "/employee/availability/",
+        response_model=EmployeeAvailabilityResponse,
+        tags=["Commerce / Employees"],
+    )
     async def create_employee_availability(
             payload: EmployeeAvailabilityRequest,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
     ):
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        data = await Employee().create_employee_availability(
-            session, config.get_user_id(user), payload.start, payload.end,
-        )
+        if not actor.has_permission("commerce.manage"):
+            raise BaseRuntime.get_not_found("Availability not found.")
+        data = await Employee().create_employee_availability(session, actor.id, payload.start, payload.end)
         await session.commit()
         return data
 
@@ -328,19 +319,20 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
             interval_id: int,
             payload: EmployeeAvailabilityUpdateRequest,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
     ):
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        current_item: EmployeeAvailabilityIntervalORM | None = await session.get(
-            EmployeeAvailabilityIntervalORM, interval_id,
-        )
-        if current_item is None or current_item.user_id != config.get_user_id(user):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Availability interval not found.")
-        start = payload.start or current_item.start
-        end = payload.end or current_item.end
+        if not actor.has_permission("commerce.manage"):
+            raise BaseRuntime.get_not_found("Availability not found.")
+        current_item = await session.get(EmployeeAvailabilityIntervalORM, interval_id)
+        if current_item is None or current_item.user_id != actor.id:
+            raise BaseRuntime.get_not_found("Availability interval not found.")
         data = await Employee().update_employee_availability(
-            session, config.get_user_id(user), interval_id, start, end,
+            session,
+            actor.id,
+            interval_id,
+            payload.start or current_item.start,
+            payload.end or current_item.end,
         )
         await session.commit()
         return data
@@ -353,17 +345,13 @@ def create_router(config: CommerceHTTPConfig) -> APIRouter:
     async def delete_employee_availability(
             interval_id: int,
             session: AsyncSession = Depends(config.get_db_session_dependency),
-            user: UserObject = Depends(config.get_current_user_dependency),
+            actor: CommerceUserActorDTO = Depends(config.get_current_actor_dependency),
+            _guard: Any = Depends(config.get_mutation_guard_dependency),
     ) -> Response:
-        if not config.is_staff(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
-        await Employee().delete_employee_availability(session, config.get_user_id(user), interval_id)
+        if not actor.has_permission("commerce.manage"):
+            raise BaseRuntime.get_not_found("Availability not found.")
+        await Employee().delete_employee_availability(session, actor.id, interval_id)
         await session.commit()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router
-
-
-__all__ = ("CommerceHTTPConfig", "create_router")
-
-

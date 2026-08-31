@@ -1,67 +1,59 @@
 # Release Guide
 
-## Local checks
+## Release gates
+
+Before releasing `0.3.x`:
+
+1. Confirm `src/commercexl/_version.py` and the README status table contain the intended version.
+2. Run the targeted payment, module, contract and configuration tests.
+3. Build both wheel and sdist and run `twine check` against them.
+4. Inspect the wheel: it must contain `commercexl`, `py.typed`, README, license metadata and no test
+   package, local secrets or generated migration files.
+5. For `0.3.0`, verify the breaking migration guide and the absence of the 0.2 payment API in docs.
+6. Open a PR into `master` and wait for CI. Do not publish from an unmerged feature branch.
+
+Suggested local commands:
 
 ```bash
-python -m pytest -q
+python -m pytest tests/test_runtime.py tests/test_module.py tests/test_payment_contracts.py tests/test_config.py -q
 python -m build
 python -m twine check dist/*
 ```
 
 ## Version bump helper
 
-Базовая команда:
-
 ```bash
+uv run python scripts/release.py patch --dry-run
 uv run python scripts/release.py patch
 ```
 
-Или через PowerShell-обёртку:
+PowerShell wrapper:
 
 ```powershell
 ./scripts/release.ps1 patch
 ```
 
-Доступные варианты:
+The helper requires a clean worktree, changes `src/commercexl/_version.py`, creates the release
+commit and tag, and optionally pushes them with `--push`. For the breaking `0.3.0` release, set and
+review the version in the feature branch before the PR; do not run a second automatic minor bump.
 
-```bash
-uv run python scripts/release.py patch
-uv run python scripts/release.py minor
-uv run python scripts/release.py major
-```
+## GitHub release flow
 
-Полезные флаги:
+1. Merge the reviewed release PR into `master`.
+2. Create and push the exact tag matching package metadata, for example `v0.3.0`.
+3. The tag starts CI. Publishing stops if the strict `vX.Y.Z` tag does not match
+   `commercexl.__version__`.
+4. After the package build and PyPI Trusted Publishing succeed, the workflow creates the matching
+   GitHub release. Existing PyPI artifacts are treated as an error rather than silently skipped.
+5. Verify that the GitHub workflow and release succeeded and that
+   [PyPI](https://pypi.org/project/commercexl/) exposes the expected wheel and sdist.
+6. Install the published version in a clean environment and verify `commercexl.__version__`.
 
-```bash
-uv run python scripts/release.py patch --dry-run
-uv run python scripts/release.py patch --push
-```
+The GitHub `pypi` environment must have a Trusted Publisher for this repository and workflow.
+Publishing uses an OIDC token; a long-lived PyPI API token must not be added as a fallback.
 
-Что делает скрипт:
+## 0.3 compatibility note
 
-1. Проверяет, что git worktree чистый.
-2. Поднимает версию в `src/commercexl/_version.py`.
-3. Создаёт commit `chore: release vX.Y.Z`.
-4. Создаёт tag `vX.Y.Z`.
-5. При `--push` пушит commit и tag.
-
-## Release flow
-
-1. Прогони локальные проверки.
-2. Подними версию через `scripts/release.py`.
-3. Если запуск был без `--push`, отдельно выполни:
-
-```bash
-git push
-git push origin vX.Y.Z
-```
-
-4. GitHub Actions:
-   - прогонит тесты
-   - соберёт пакет
-   - опубликует его в PyPI
-
-## PyPI publishing
-
-The workflow is configured for trusted publishing with `pypi` environment.
-Configure that environment in GitHub before the first release.
+Provider add-ons should depend on `commercexl>=0.3,<0.4` only after `0.3.0` is published. During
+coordinated local development they may use an editable checkout or the locally built `0.3.0` wheel,
+but the committed lockfile must resolve a reproducible published artifact.

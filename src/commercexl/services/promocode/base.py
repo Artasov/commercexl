@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -56,7 +56,7 @@ class Promocode(BaseRuntime):
                     id=discount.id,
                     product=discount.product_id,
                     currency=discount.currency,
-                    amount=float(discount.amount),
+                    amount=discount.amount,
                     max_usage=discount.max_usage,
                     max_usage_per_user=discount.max_usage_per_user,
                     interval_days=discount.interval_days,

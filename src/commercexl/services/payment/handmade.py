@@ -1,49 +1,67 @@
-﻿from __future__ import annotations
-
-from datetime import UTC, datetime
-from decimal import Decimal
+from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from commercexl.dto import CommerceUserActorDTO
 from commercexl.models import HandMadePaymentORM, OrderORM, PaymentORM
+from commercexl.payment import (
+    CheckoutAction,
+    PaymentCreateContext,
+    PaymentCreateResult,
+    PaymentOption,
+    PaymentState,
+    PaymentVerificationResult,
+)
 from commercexl.services.payment.base import AbstractPaymentService
 
 
 class HandMadePaymentService(AbstractPaymentService):
-    """Ручная оплата без внешнего провайдера."""
+    """Ручная неоплаченная попытка с явным manual action."""
 
-    payment_system = "handmade"
-    payment_kind = "handmadepayment"
+    action_payload = {"message": "Awaiting manual payment confirmation."}
+
+    async def list_options(
+            self,
+            session: AsyncSession,
+            order: OrderORM,
+            actor: CommerceUserActorDTO,
+    ) -> tuple[PaymentOption, ...]:
+        _ = session
+        _ = order
+        _ = actor
+        return (
+            PaymentOption(
+                id="handmade",
+                label="Manual payment",
+                action_kind="manual",
+            ),
+        )
 
     async def create(
             self,
             session: AsyncSession,
-            order: OrderORM,
-            amount: Decimal,
-            request_base_url: str,
-    ) -> PaymentORM:
-        _ = request_base_url
-        payment = await self.create_parent_payment(
-            session,
-            order=order,
-            amount=amount,
-            is_paid=False,
-            payment_url=None,
+            context: PaymentCreateContext,
+    ) -> PaymentCreateResult:
+        session.add(HandMadePaymentORM(payment_ptr_id=context.payment.id))
+        await session.flush()
+        return PaymentCreateResult(
+            action=CheckoutAction(kind="manual", payload=self.action_payload),
         )
-        session.add(HandMadePaymentORM(payment_ptr_id=payment.id))
-        return payment
 
-    async def is_paid(self, session: AsyncSession, payment_id: int) -> bool:
-        payment = await session.get(PaymentORM, payment_id)
-        return bool(payment and payment.is_paid)
-
-    async def get_pay_link(self, session: AsyncSession, payment_id: int) -> str | None:
-        payment = await session.get(PaymentORM, payment_id)
-        return str(payment.payment_url) if payment and payment.payment_url is not None else None
-
-    async def refund(self, session: AsyncSession, order: OrderORM, payment: PaymentORM) -> None:
+    async def get_action(
+            self,
+            session: AsyncSession,
+            payment: PaymentORM,
+    ) -> CheckoutAction:
         _ = session
-        _ = order
-        payment.updated_at = datetime.now(UTC)
+        _ = payment
+        return CheckoutAction(kind="manual", payload=self.action_payload)
 
-
+    async def cancel(
+            self,
+            session: AsyncSession,
+            payment: PaymentORM,
+    ) -> PaymentVerificationResult:
+        _ = session
+        _ = payment
+        return PaymentVerificationResult(state=PaymentState.CANCELLED)

@@ -16,34 +16,36 @@
 
 Composable commerce backend foundation for the [Orcestr](https://orcestr.com) ecosystem.
 
-CommerceXL provides reusable product, order-item, payment and balance primitives for FastAPI and
-SQLAlchemy applications. The host application keeps control of its database engine, sessions,
-users, authentication, migrations and project-specific payment callbacks.
+CommerceXL provides reusable catalog, order, balance and payment primitives for FastAPI,
+Pydantic 2 and SQLAlchemy 2 applications. The host application owns the database engine,
+sessions, users, authentication, CSRF policy, migrations and provider-specific callback routes.
 
 ## Status
 
 | Item | Value |
 | --- | --- |
 | Package | `commercexl` |
-| Version | `0.2.0` |
-| Status | Beta |
+| Version | `0.3.0` |
+| Status | Beta, breaking from 0.2 |
 | Runtime | Python 3.12+ |
 | Frameworks | FastAPI, SQLAlchemy 2, Pydantic 2 |
-
-The public API is usable in Orcestr applications and remains subject to beta-level refinement
-before the first stable major release.
 
 ## What Is Included
 
 | Area | Includes |
 | --- | --- |
-| Catalog | reusable product contracts and service boundaries |
-| Checkout | order and order-item DTOs and services |
-| Payments | configurable payment providers and handmade payments |
-| Balances | user credit balances and currency conversion settings |
-| Promotions | promocode and gift-certificate foundations |
-| HTTP | explicit FastAPI router assembly through `create_router(...)` |
-| Persistence | typed SQLAlchemy models through `CommerceBase` |
+| Catalog | products, exact decimal prices and extensible product services |
+| Orders | multi-item orders with canonical order and item states |
+| Payments | canonical payment attempts, strict provider registry and typed checkout actions |
+| Lifecycle | idempotent create, verification, cancellation, refund and exact-once product finalization |
+| Balances | internal credit balances and currency conversion settings |
+| Promotions | promocodes and gift-certificate foundations |
+| Events | transactional payment outbox and globally unique provider evidence claims |
+| HTTP | auth-neutral FastAPI router assembled through `create_router(...)` |
+| Persistence | typed SQLAlchemy models exposed through `CommerceBase` |
+
+CommerceXL does not include a frontend, wallet integration, blockchain verifier or payment-provider
+credentials. Those belong in separate provider packages and host adapters.
 
 ## Installation
 
@@ -69,6 +71,7 @@ from commercexl import (
     DefaultOrderItemService,
     HandMadePaymentService,
     PaymentConfigBuilder,
+    PaymentProviderRegistration,
     ProductOrderConfig,
     ProductOrderConfigBuilder,
 )
@@ -85,34 +88,79 @@ commerce = CommerceModule(
     product_orders=ProductOrderConfigBuilder(
         ProductOrderConfig(MyProductService, DefaultOrderItemService),
     ),
-    payments=PaymentConfigBuilder(HandMadePaymentService),
+    payments=PaymentConfigBuilder(
+        PaymentProviderRegistration(
+            system="handmade",
+            provider_kind="handmade",
+            factory=HandMadePaymentService,
+        ),
+    ),
+    public_base_url="https://commerce.example.com",
 )
 ```
 
+Provider registration is strict. A duplicate normalized `system`, a missing provider referenced by
+`PAYMENT_SYSTEMS`, or a factory returning the wrong service type fails during module construction.
+
 ## FastAPI Integration
 
+The host supplies an authenticated actor dependency and a mandatory mutation guard. For
+cookie-authenticated applications, the mutation guard is the host CSRF dependency.
+
 ```python
+from fastapi import Depends
 from commercexl import CommerceHTTPConfig, CommerceUserActorDTO, create_router
+
+
+async def get_commerce_actor(user=Depends(get_current_user)) -> CommerceUserActorDTO:
+    return CommerceUserActorDTO(id=user.id, permissions=frozenset(user.permissions))
+
 
 app.include_router(
     create_router(
         CommerceHTTPConfig(
             get_db_session_dependency=get_db_session,
-            get_current_user_dependency=get_current_user,
+            get_current_actor_dependency=get_commerce_actor,
+            get_mutation_guard_dependency=check_csrf,
             get_commerce_module=lambda: commerce,
-            build_actor=lambda user: CommerceUserActorDTO(id=user.id),
-            get_user_id=lambda user: int(user.id),
-            is_staff=lambda user: bool(user.is_staff),
         ),
     ),
     prefix="/api/v1",
 )
 ```
 
+The checkout is intentionally two-phase:
+
+1. `POST /orders/` creates a server-priced order and requires `Idempotency-Key`.
+2. `GET /orders/{order_id}/payment-options/` returns options available to that actor and order.
+3. `POST /orders/{order_id}/payment-attempts/` accepts only `payment_option_id` and another
+   `Idempotency-Key`.
+4. `GET /payments/{payment_public_id}/` returns authoritative state without issuing a secret.
+5. `POST /payments/{payment_public_id}/checkout-action/` issues a fresh provider action.
+
+Amounts are `Decimal` in Python and decimal strings in JSON. The client cannot submit the final
+payment amount, commercial currency or arbitrary provider system when creating an attempt.
+
+## Provider Contract
+
+Provider packages implement `AbstractPaymentService` or `AbstractCallbackPaymentService` and are
+registered through `PaymentProviderRegistration`. The stable provider-facing imports include
+`PaymentCreateContext`, `PaymentCreateResult`, `PaymentOption`, `CheckoutAction`,
+`PaymentVerificationResult` and `PaymentState`.
+
+The canonical `PaymentORM` is the extension root for provider child tables. Providers do not mutate
+orders or mark them paid directly. A trusted callback/reconciliation adapter returns a typed
+verification result and passes it to `PaymentRuntime.apply_verification(...)` in the current DB
+session.
+
+Checkout capability URLs and transaction-request bearer values must be issued by
+`get_action(...)`; CommerceXL persists only non-secret action metadata. Safe provider evidence is
+claimed globally and payment changes write `PaymentOutboxEventORM` in the same transaction.
+
 ## Database Migrations
 
-CommerceXL does not ship application migrations. Add its metadata to the host project's Alembic
-configuration and create migrations in the host repository:
+CommerceXL does not ship application migrations. Add its metadata to the host Alembic setup and
+generate/review migrations in the host repository:
 
 ```python
 from commercexl import CommerceBase
@@ -121,9 +169,14 @@ from my_project.db import Base
 target_metadata = [Base.metadata, CommerceBase.metadata]
 ```
 
+Version 0.3 is a deliberate breaking schema/API release. Follow the
+[0.2 to 0.3 migration guide](./src/commercexl/docs/MIGRATION_0_3.md) before upgrading production
+data.
+
 ## Documentation
 
 - [Integration guide](./src/commercexl/docs/HOW_TO_USE.md)
+- [0.3 migration guide](./src/commercexl/docs/MIGRATION_0_3.md)
 - [Promocodes](./src/commercexl/docs/PROMOCODES.md)
 - [Gift certificates](./src/commercexl/docs/GIFT_CERTIFICATES.md)
 - [Release guide](./RELEASE_GUIDE.md)
@@ -136,9 +189,6 @@ uv run pytest -q
 uv build
 ```
 
-PyCharm run configurations for dependency installation, tests, builds and releases live in
-[`.run`](./.run).
-
 ## License
 
 Licensed under the [Mozilla Public License 2.0](./LICENSE). Commercial use is permitted; changes
@@ -150,4 +200,4 @@ to MPL-covered files remain subject to the MPL. See [NOTICE](./NOTICE) and
 - [Orcestr](https://orcestr.com)
 - [Orcestr Auth](https://github.com/Artasov/orcestr-auth)
 - [Orcestr UI](https://github.com/Artasov/orcestr-ui)
-- [Orcestr Overview](https://github.com/Artasov/orcestr-overview)
+- [Orcestr OS](https://github.com/Artasov/orcestr-os)
