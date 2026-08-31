@@ -371,6 +371,8 @@ class PaymentRuntime(BaseRuntime):
                 options.append(
                     PaymentOptionDTO(
                         **option.model_dump(),
+                        amount=Decimal(order.amount),
+                        currency=order.currency,
                         payment_system=service.payment_system,
                         provider_kind=service.provider_kind,
                     ),

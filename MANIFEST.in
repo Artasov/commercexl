@@ -1,5 +1,6 @@
 include README.md
 include README.ru.md
+include CHANGELOG.md
 include LICENSE
 include NOTICE
 include TRADEMARKS.md

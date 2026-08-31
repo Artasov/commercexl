@@ -102,6 +102,10 @@ class MySimpleProductService(AbstractProductService[None]):
 Prices and balances use `Decimal` in Python and `Numeric(20, 6)` in the built-in models. Public JSON
 uses decimal strings. A provider-specific raw blockchain amount belongs in its child model as an
 integer/base-unit value, not in the CommerceXL commercial `currency` or `amount` fields.
+`ProductPriceORM.currency` accepts any normalized host-defined code up to 12 characters. Add one
+row per `(product_id, currency)`; do not put catalog prices in environment variables. Order and
+order-item rows copy that selected price at creation time and remain unchanged when the catalog row
+is edited later.
 
 ## 3. Implement a payment provider
 
@@ -259,6 +263,9 @@ Content-Type: application/json
 
 {"payment_option_id": "gateway:default"}
 ```
+
+Every returned `PaymentOptionDTO` contains the `amount` and `currency` copied from the immutable
+order snapshot. Providers return only `PaymentOption`; core adds snapshot and provider identity.
 
 The create-attempt request has no amount, currency or free-form payment system. Repeating the same
 idempotency key and fingerprint returns the same attempt; changing the payload produces `409`.
