@@ -3,14 +3,8 @@ from commercexl.schemas.employees import (
     EmployeeAvailabilityResponse,
     EmployeeAvailabilityUpdateRequest,
 )
-from commercexl.schemas.orders import (
-    CreateOrderIdOnlyResponse,
-    CreateOrderRequest,
-    CreateOrderResponse,
-    UserOrderResponse,
-)
-from commercexl.schemas.payments import InitPaymentRequest, PaymentResponse
-from commercexl.schemas.pricing import PaymentTypesResponse
+from commercexl.schemas.orders import CreateOrderRequest, CreateOrderResponse, UserOrderResponse
+from commercexl.schemas.payments import CreatePaymentAttemptRequest, PaymentOptionsResponse, PaymentResponse
 from commercexl.schemas.products import (
     ActivateGiftCertificateRequest,
     GiftCertificateActivateResponse,
@@ -23,16 +17,15 @@ from commercexl.schemas.promocodes import PromocodeCheckRequest, PromocodeRespon
 __all__ = (
     "ActivateGiftCertificateRequest",
     "CreateOrderRequest",
-    "CreateOrderIdOnlyResponse",
     "CreateOrderResponse",
+    "CreatePaymentAttemptRequest",
     "EmployeeAvailabilityRequest",
     "EmployeeAvailabilityResponse",
     "EmployeeAvailabilityUpdateRequest",
     "GiftCertificateActivateResponse",
     "GiftCertificateResponse",
-    "InitPaymentRequest",
+    "PaymentOptionsResponse",
     "PaymentResponse",
-    "PaymentTypesResponse",
     "ProductResponse",
     "PromocodeCheckRequest",
     "PromocodeResponse",

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from commercexl import (
@@ -14,7 +14,9 @@ from commercexl import (
     CommerceHTTPConfig,
     CommerceModule,
     CommerceUserActorDTO,
-    OrderORM,
+    HandMadePaymentService,
+    PaymentConfigBuilder,
+    PaymentProviderRegistration,
     create_router,
     get_default_commerce_module,
 )
@@ -26,6 +28,10 @@ class TestConfig(BaseConfig):
     CREDITS_CONVERTERS = {"USD": Decimal("100")}
 
 
+def handmade_registration() -> PaymentProviderRegistration:
+    return PaymentProviderRegistration("handmade", "handmade", HandMadePaymentService)
+
+
 def test_default_commerce_module_registers_balance_order_item_service():
     commerce = get_default_commerce_module()
     handler = commerce.create_base_runtime().product_registry.get_handler_by_kind("balance")
@@ -34,32 +40,50 @@ def test_default_commerce_module_registers_balance_order_item_service():
     assert handler.get_order_item_service_class() is BalanceOrderItemService
 
 
-def test_commerce_module_raises_without_registered_payment_service():
+def test_commerce_module_rejects_unregistered_configured_payment_system():
     class BrokenConfig(BaseConfig):
         PAYMENT_SYSTEMS = {"USD": ("handmade", "missing")}
         MIN_TOP_UP_AMOUNTS = {"USD": Decimal("1")}
         CREDITS_CONVERTERS = {"USD": Decimal("100")}
 
-    try:
+    with pytest.raises(TypeError, match="missing"):
         CommerceModule(
             config_class=BrokenConfig,
-            payments=type("EmptyPaymentBuilder", (), {"get_registered_systems": lambda self: {"handmade"}})(),
+            payments=PaymentConfigBuilder(handmade_registration()),
         )
-    except TypeError as exc:
-        assert "missing" in str(exc)
-    else:
-        raise AssertionError("CommerceModule must reject unknown payment services in config.")
 
 
-def test_http_router_factory_builds_routes_without_project_dependencies():
+def test_commerce_module_rejects_request_derived_public_base_url_shape():
+    with pytest.raises(TypeError, match="absolute HTTP origin"):
+        CommerceModule(
+            config_class=TestConfig,
+            payments=PaymentConfigBuilder(handmade_registration()),
+            public_base_url="https://commerce.example.com/untrusted/request/path",
+        )
+
+
+def test_payment_registration_is_normalized_strict_and_factory_injected():
+    runtime = SimpleNamespace()
+    registration = PaymentProviderRegistration(" HandMade ", " BuiltIn ", HandMadePaymentService)
+    service = registration.create_service(runtime)
+
+    assert registration.system == "handmade"
+    assert registration.provider_kind == "builtin"
+    assert service.commerce is runtime
+    assert service.registration is registration
+
+    with pytest.raises(TypeError, match="already registered"):
+        PaymentConfigBuilder(registration).add(
+            PaymentProviderRegistration("HANDMADE", "another-kind", HandMadePaymentService),
+        )
+
+
+def test_http_router_exposes_two_phase_checkout_without_legacy_routes():
     class FakeBaseRuntime:
-        async def get_or_create_balance(self, session, user_id):
+        async def get_balance(self, session, user_id):
             _ = session
             _ = user_id
             return SimpleNamespace(amount=Decimal("42"))
-
-        async def get_payment_types(self):
-            return {"USD": ["handmade"]}
 
     class FakeProductSerializer:
         async def get_latest_balance_product(self, session):
@@ -70,92 +94,12 @@ def test_http_router_factory_builds_routes_without_project_dependencies():
             _ = session
             return []
 
-    class FakeOrderRuntime:
-        async def create_order(self, session, actor, payload, request_base_url):
-            _ = session
-            _ = actor
-            _ = payload
-            _ = request_base_url
-            return {"id": str(uuid4())}
-
-        async def get_order(self, session, order_id):
-            _ = session
-            return OrderORM(
-                id=order_id,
-                user_id=1,
-                amount=Decimal("10"),
-                currency="USD",
-                payment_system="handmade",
-                payment_id=None,
-                promocode_id=None,
-                is_inited=False,
-                is_executed=False,
-                is_paid=False,
-                is_cancelled=False,
-                is_refunded=False,
-                kind="order",
-            )
-
-    class FakeOrderSerializer:
-        async def get_user_orders(self, session, user_id):
-            _ = session
-            _ = user_id
-            return []
-
-        async def serialize_order(self, session, order):
-            _ = session
-            return {
-                "id": str(order.id),
-                "user_id": order.user_id,
-                "amount": float(order.amount),
-                "currency": order.currency,
-                "payment_system": order.payment_system,
-                "payment_id": order.payment_id,
-                "promocode_id": order.promocode_id,
-                "is_inited": order.is_inited,
-                "is_executed": order.is_executed,
-                "is_paid": order.is_paid,
-                "is_cancelled": order.is_cancelled,
-                "is_refunded": order.is_refunded,
-                "state": "created",
-                "items": [],
-                "payment": None,
-            }
-
-    class FakePaymentRuntime:
-        async def get_order(self, session, order_id):
-            return await FakeOrderRuntime().get_order(session, order_id)
-
-        async def init_payment(self, session, order, payload, request_base_url):
-            _ = session
-            _ = order
-            _ = payload
-            _ = request_base_url
-            return {
-                "id": 1,
-                "amount": 10.0,
-                "currency": "USD",
-                "kind": "handmade",
-                "payment_url": None,
-                "is_paid": False,
-                "extras": None,
-            }
-
     class FakeCommerceModule:
         def create_base_runtime(self):
             return FakeBaseRuntime()
 
         def create_product_serializer(self):
             return FakeProductSerializer()
-
-        def create_order_runtime(self):
-            return FakeOrderRuntime()
-
-        def create_order_serializer(self):
-            return FakeOrderSerializer()
-
-        def create_payment_runtime(self):
-            return FakePaymentRuntime()
 
     class FakeSession:
         async def commit(self) -> None:
@@ -164,29 +108,74 @@ def test_http_router_factory_builds_routes_without_project_dependencies():
     async def get_session():
         return FakeSession()
 
-    def get_user():
-        return SimpleNamespace(id=1, is_staff=False)
+    def get_actor() -> CommerceUserActorDTO:
+        return CommerceUserActorDTO(id=1)
+
+    def mutation_guard() -> None:
+        return None
 
     app = FastAPI()
     app.include_router(
         create_router(
             CommerceHTTPConfig(
                 get_db_session_dependency=get_session,
-                get_current_user_dependency=get_user,
+                get_current_actor_dependency=get_actor,
+                get_mutation_guard_dependency=mutation_guard,
                 get_commerce_module=FakeCommerceModule,
-                build_actor=lambda user: CommerceUserActorDTO(id=user.id),
-                get_user_id=lambda user: int(user.id),
-                is_staff=lambda user: bool(user.is_staff),
             ),
         ),
         prefix="/api/v1",
     )
-
     client = TestClient(app)
 
-    assert client.get("/api/v1/payment/types/").json() == {"USD": ["handmade"]}
     assert client.get("/api/v1/products/").json() == []
-    assert client.get("/api/v1/user/balance/").json() == {"balance": 42.0}
+    assert client.get("/api/v1/user/balance/").json() == {"balance": "42"}
+    assert client.get("/api/v1/payment/types/").status_code == 404
+    assert client.post(f"/api/v1/orders/{uuid4()}/init-payment/", json={}).status_code == 404
+
+    paths = app.openapi()["paths"]
+    assert "/api/v1/orders/{order_id}/payment-options/" in paths
+    assert "/api/v1/orders/{order_id}/payment-attempts/" in paths
+    assert "/api/v1/payments/{payment_public_id}/checkout-action/" in paths
+
+
+def test_http_mutation_requires_authenticated_actor_and_host_guard():
+    class FakeCommerceModule:
+        pass
+
+    async def get_session():
+        return SimpleNamespace()
+
+    def reject_actor():
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
+    def actor() -> CommerceUserActorDTO:
+        return CommerceUserActorDTO(id=1)
+
+    def reject_mutation():
+        raise HTTPException(status_code=403, detail="Mutation guard rejected request.")
+
+    def allow_mutation() -> None:
+        return None
+
+    def build_client(actor_dependency, guard_dependency) -> TestClient:
+        app = FastAPI()
+        app.include_router(
+            create_router(
+                CommerceHTTPConfig(
+                    get_db_session_dependency=get_session,
+                    get_current_actor_dependency=actor_dependency,
+                    get_mutation_guard_dependency=guard_dependency,
+                    get_commerce_module=FakeCommerceModule,
+                ),
+            ),
+        )
+        return TestClient(app)
+
+    request = {"product": 1, "currency": "USD"}
+    headers = {"Idempotency-Key": "order-key"}
+    assert build_client(reject_actor, allow_mutation).post("/orders/", json=request, headers=headers).status_code == 401
+    assert build_client(actor, reject_mutation).post("/orders/", json=request, headers=headers).status_code == 403
 
 
 def test_http_router_factory_supports_gift_certificate_routes(monkeypatch: pytest.MonkeyPatch):
@@ -259,8 +248,11 @@ def test_http_router_factory_supports_gift_certificate_routes(monkeypatch: pytes
     async def get_session():
         return FakeSession()
 
-    def get_user():
-        return SimpleNamespace(id=7, is_staff=False)
+    def get_actor() -> CommerceUserActorDTO:
+        return CommerceUserActorDTO(id=7)
+
+    def mutation_guard() -> None:
+        return None
 
     monkeypatch.setattr("commercexl.http.GiftCertificate", FakeGiftCertificateService)
 
@@ -269,11 +261,9 @@ def test_http_router_factory_supports_gift_certificate_routes(monkeypatch: pytes
         create_router(
             CommerceHTTPConfig(
                 get_db_session_dependency=get_session,
-                get_current_user_dependency=get_user,
+                get_current_actor_dependency=get_actor,
+                get_mutation_guard_dependency=mutation_guard,
                 get_commerce_module=FakeCommerceModule,
-                build_actor=lambda user: CommerceUserActorDTO(id=user.id),
-                get_user_id=lambda user: int(user.id),
-                is_staff=lambda user: bool(user.is_staff),
             ),
         ),
         prefix="/api/v1",

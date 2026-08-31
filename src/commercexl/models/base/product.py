@@ -1,11 +1,12 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from commercexl.money import Money
 from commercexl.models.orm_base import CommerceBase
 
 
@@ -35,16 +36,21 @@ class ProductORM(CommerceBase):
 
 
 class ProductPriceORM(CommerceBase):
-    """Цена продукта в конкретной валюте."""
+    """Цена продукта в конкретной коммерческой валюте."""
 
     __tablename__ = "commerce_product_price"
     __table_args__ = (
         UniqueConstraint("product_id", "currency", name="commerce_product_price_product_id_currency_key"),
+        CheckConstraint("amount >= 0", name="commerce_product_price_amount_nonnegative"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     product_id: Mapped[int] = mapped_column(ForeignKey("commerce_product.id"), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False)
-    exponent: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
-    offset: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    amount: Mapped[Decimal] = mapped_column(Money.sql_type(), nullable=False)
+    currency: Mapped[str] = mapped_column(String(Money.currency_code_length), nullable=False)
+    exponent: Mapped[Decimal | None] = mapped_column(Money.sql_type())
+    offset: Mapped[Decimal | None] = mapped_column(Money.sql_type())

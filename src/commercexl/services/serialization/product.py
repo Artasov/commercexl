@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,7 @@ from commercexl.services.base_runtime import BaseRuntime
 
 
 class ProductSerializer(BaseRuntime):
-    """Сериализация публичных данных продукта."""
+    """Сериализует публичные продукты без float conversion."""
 
     async def get_latest_balance_product(self, session: AsyncSession) -> ProductDTO | None:
         query = (
@@ -20,9 +20,7 @@ class ProductSerializer(BaseRuntime):
             .limit(1)
         )
         product = (await session.execute(query)).scalar_one_or_none()
-        if product is None:
-            return None
-        return await self.serialize_product(session, product)
+        return await self.serialize_product(session, product) if product is not None else None
 
     async def list_products(self, session: AsyncSession) -> list[ProductDTO]:
         query = select(ProductORM).where(ProductORM.is_available.is_(True)).order_by(ProductORM.id.asc())
@@ -48,9 +46,9 @@ class ProductSerializer(BaseRuntime):
                     id=price.id,
                     product=product.id,
                     currency=price.currency,
-                    amount=float(price.amount),
-                    exponent=float(price.exponent) if price.exponent is not None else None,
-                    offset=float(price.offset) if price.offset is not None else None,
+                    amount=price.amount,
+                    exponent=price.exponent,
+                    offset=price.offset,
                 )
                 for price in prices
             ],
@@ -60,5 +58,3 @@ class ProductSerializer(BaseRuntime):
         _ = session
         _ = product
         return None
-
-

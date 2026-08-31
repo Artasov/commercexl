@@ -1,64 +1,54 @@
-﻿from pydantic import BaseModel, ConfigDict
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
 
 from commercexl.dto.payment import PaymentDTO
 from commercexl.dto.product import ProductDTO
 from commercexl.dto.promocode import PromocodeDTO
-
-
-class OrderDTO(BaseModel):
-    """Единая DTO заказа для API с общими полями и optional-полями конкретного продукта."""
-
-    id: str
-    amount: float | None = None
-    payment: PaymentDTO | None = None
-    currency: str
-    payment_system: str
-    promocode: PromocodeDTO | None = None
-    created_at: str
-    updated_at: str
-    state: str
-    is_inited: bool
-    is_paid: bool
-    is_executed: bool
-    is_cancelled: bool
-    is_refunded: bool
-    product: ProductDTO | None = None
-    requested_amount: float | None = None
-    credited_amount: float | None = None
-    key: str | None = None
-    license_hours: int | None = None
-    items: list["OrderItemDTO"] | None = None
+from commercexl.money import MoneyAmount
+from commercexl.order import OrderItemState, OrderState
 
 
 class OrderItemDTO(BaseModel):
-    """Одна позиция внутри общего заказа с несколькими продуктами."""
+    """Одна позиция заказа без дублирования флагов состояния."""
 
-    id: str
-    amount: float | None = None
-    currency: str
-    state: str
-    is_inited: bool
-    is_paid: bool
-    is_executed: bool
-    is_cancelled: bool
-    is_refunded: bool
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    amount: MoneyAmount
+    state: OrderItemState
     product: ProductDTO | None = None
-    requested_amount: float | None = None
-    credited_amount: float | None = None
+    requested_amount: MoneyAmount | None = None
+    credited_amount: MoneyAmount | None = None
     key: str | None = None
     license_hours: int | None = None
 
 
-class CreateOrderIdOnlyDTO(BaseModel):
+class OrderDTO(BaseModel):
+    """Provider-neutral заказ с текущей последней попыткой оплаты."""
+
     model_config = ConfigDict(extra="forbid")
-    id: str
+
+    id: UUID
+    amount: MoneyAmount
+    currency: str
+    state: OrderState
+    payment: PaymentDTO | None = None
+    promocode: PromocodeDTO | None = None
+    created_at: datetime
+    updated_at: datetime
+    items: list[OrderItemDTO]
 
 
 class CreateOrderDTO(BaseModel):
-    id: str
-    payment_url: str | None = None
+    """Результат первой фазы checkout без неявной payment URL semantics."""
 
+    model_config = ConfigDict(extra="forbid")
 
-OrderDTO.model_rebuild()
-
-
+    id: UUID
+    amount: MoneyAmount
+    currency: str
+    state: OrderState

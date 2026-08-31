@@ -1,9 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Callable
 from decimal import Decimal
 
 from commercexl.models import Currency
+from commercexl.money import Money
 
 CurrencyValue = str | Currency
 MinTopUpAmountRule = Decimal | Callable[[], Decimal]
@@ -11,7 +12,7 @@ CreditsConverterRule = Decimal | Callable[[Decimal], Decimal]
 
 
 class BaseConfig:
-    """Конфиг по умолчанию для базового `commerce`."""
+    """Coarse allowlist валют и provider systems для commerce."""
 
     PAYMENT_SYSTEMS: dict[str, tuple[str, ...]] = {
         "RUB": ("handmade", "balance"),
@@ -31,10 +32,25 @@ class BaseConfig:
     def normalize_currency(cls, currency: CurrencyValue) -> str:
         if isinstance(currency, Currency):
             return currency.value
-        normalized_currency = str(currency).strip().upper()
+        if not isinstance(currency, str):
+            raise TypeError("Currency code must be a string.")
+        normalized_currency = currency.strip().upper()
         if not normalized_currency:
             raise TypeError("Currency code cannot be empty.")
+        if len(normalized_currency) > Money.currency_code_length:
+            raise TypeError(f"Currency code cannot exceed {Money.currency_code_length} characters.")
         return normalized_currency
+
+    @staticmethod
+    def normalize_payment_system(payment_system: str) -> str:
+        if not isinstance(payment_system, str):
+            raise TypeError("Payment system must be a string.")
+        normalized_system = payment_system.strip().lower()
+        if not normalized_system:
+            raise TypeError("Payment system cannot be empty.")
+        if len(normalized_system) > 50:
+            raise TypeError("Payment system cannot exceed 50 characters.")
+        return normalized_system
 
     @classmethod
     def get_currency_codes(cls) -> tuple[str, ...]:
@@ -43,7 +59,10 @@ class BaseConfig:
     @classmethod
     def get_payment_systems_map(cls) -> dict[str, tuple[str, ...]]:
         return {
-            cls.normalize_currency(currency): tuple(str(system) for system in payment_systems)
+            cls.normalize_currency(currency): tuple(
+                cls.normalize_payment_system(system)
+                for system in payment_systems
+            )
             for currency, payment_systems in cls.PAYMENT_SYSTEMS.items()
         }
 
@@ -67,28 +86,29 @@ class BaseConfig:
 
         for currency in currencies:
             if not payment_systems[currency]:
-                raise TypeError(f"{cls.__name__}.PAYMENT_SYSTEMS[{currency}] must contain at least one payment system.")
+                raise TypeError(f"{cls.__name__}.PAYMENT_SYSTEMS[{currency}] must contain a payment system.")
             if "balance" in payment_systems[currency] and currency not in min_top_up_amounts:
                 raise TypeError(
-                    f"{cls.__name__}.MIN_TOP_UP_AMOUNTS must contain {currency} because balance payment is enabled.",
+                    f"{cls.__name__}.MIN_TOP_UP_AMOUNTS must contain {currency} because balance is enabled.",
                 )
             if "balance" in payment_systems[currency] and currency not in credits_converters:
                 raise TypeError(
-                    f"{cls.__name__}.CREDITS_CONVERTERS must contain {currency} because balance payment is enabled.",
+                    f"{cls.__name__}.CREDITS_CONVERTERS must contain {currency} because balance is enabled.",
                 )
 
     @classmethod
     def get_min_top_up_amount(cls, currency: CurrencyValue) -> Decimal:
-        rule: MinTopUpAmountRule = cls.get_min_top_up_amounts_map().get(cls.normalize_currency(currency), Decimal("1"))
+        rule: MinTopUpAmountRule = cls.get_min_top_up_amounts_map().get(
+            cls.normalize_currency(currency),
+            Decimal("1"),
+        )
         value = rule() if callable(rule) else rule
-        return Decimal(str(value))
+        return Decimal(value)
 
     @classmethod
     def calc_credits(cls, currency: CurrencyValue, amount: Decimal) -> Decimal:
         converter = cls.get_credits_converters_map().get(cls.normalize_currency(currency))
         if converter is None:
             raise KeyError(cls.normalize_currency(currency))
-        value = converter(amount) if callable(converter) else Decimal(str(converter)) * amount
-        return Decimal(str(value)).quantize(Decimal("0.000001"))
-
-
+        value = converter(amount) if callable(converter) else Decimal(converter) * amount
+        return Decimal(value).quantize(Decimal("0.000001"))

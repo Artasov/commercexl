@@ -1,9 +1,9 @@
-﻿from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class InitPaymentRequest(BaseModel):
-    payment_system: str
-    currency: str
-    amount: float = 0
+class CreatePaymentAttemptRequest(BaseModel):
+    """Выбирает только opaque server-published payment option."""
 
+    model_config = ConfigDict(extra="forbid")
 
+    payment_option_id: str = Field(min_length=1, max_length=200)

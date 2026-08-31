@@ -1,5 +1,7 @@
 from commercexl.models.base import Currency, OrderItemORM, OrderORM, PaymentORM, ProductORM, ProductPriceORM
 from commercexl.models.employees import EmployeeAvailabilityIntervalORM, EmployeeLeaveORM, EmployeeORM
+from commercexl.models.outbox import PaymentOutboxEventORM
+from commercexl.models.payment_evidence import PaymentEvidenceORM
 from commercexl.models.payments import BalancePaymentORM, HandMadePaymentORM
 from commercexl.models.products import (
     BalanceOrderItemORM,
@@ -34,6 +36,8 @@ __all__ = (
     "OrderItemORM",
     "OrderORM",
     "PaymentORM",
+    "PaymentEvidenceORM",
+    "PaymentOutboxEventORM",
     "ProductORM",
     "ProductPriceORM",
     "PromocodeORM",

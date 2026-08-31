@@ -1,7 +1,11 @@
-﻿from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+from commercexl.money import MoneyAmount
 
 
 class UserBalanceDTO(BaseModel):
-    balance: float
+    """Точный баланс пользователя в виде Decimal/string контракта."""
 
+    model_config = ConfigDict(extra="forbid")
 
+    balance: MoneyAmount

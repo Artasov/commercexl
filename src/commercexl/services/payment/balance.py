@@ -1,76 +1,125 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from commercexl.models import BalancePaymentORM, OrderORM, PaymentORM
+from commercexl.dto import CommerceUserActorDTO
+from commercexl.models import BalancePaymentORM, OrderORM, PaymentORM, UserCreditsBalanceORM
+from commercexl.payment import (
+    CheckoutAction,
+    PaymentCreateContext,
+    PaymentCreateResult,
+    PaymentOption,
+    PaymentState,
+    PaymentVerificationResult,
+)
 from commercexl.services.payment.base import AbstractPaymentService
 from commercexl.services.pricing.credits import Credits
 
 
 class BalancePaymentService(AbstractPaymentService):
-    """Оплата внутренним балансом пользователя."""
+    """Синхронная оплата внутренним балансом через общий core finalizer."""
 
-    payment_system = "balance"
-    payment_kind = "balancepayment"
-    blocks_order_cancellation = True
+    async def list_options(
+            self,
+            session: AsyncSession,
+            order: OrderORM,
+            actor: CommerceUserActorDTO,
+    ) -> tuple[PaymentOption, ...]:
+        balance = await session.scalar(
+            select(UserCreditsBalanceORM).where(UserCreditsBalanceORM.user_id == actor.id),
+        )
+        credits_cost = Credits.to_credits(
+            self.commerce.get_config(),
+            order.currency,
+            Decimal(order.amount),
+        )
+        if balance is None or Decimal(balance.amount) < credits_cost:
+            return ()
+        return (
+            PaymentOption(
+                id="balance",
+                label="Internal balance",
+                action_kind="completed",
+            ),
+        )
 
     async def create(
             self,
             session: AsyncSession,
-            order: OrderORM,
-            amount: Decimal,
-            request_base_url: str,
-    ) -> PaymentORM:
-        _ = request_base_url
-        if order.user_id is None:
-            raise self.commerce.get_bad_request("User not found.")
+            context: PaymentCreateContext,
+    ) -> PaymentCreateResult:
+        balance_query = (
+            select(UserCreditsBalanceORM)
+            .where(UserCreditsBalanceORM.user_id == context.actor.id)
+            .with_for_update()
+        )
+        balance = (await session.execute(balance_query)).scalar_one_or_none()
+        if balance is None:
+            balance = await self.commerce.get_or_create_balance(session, context.actor.id)
 
-        balance = await self.commerce.get_or_create_balance(session, order.user_id)
-        credits_cost = Credits.to_credits(self.commerce.get_config(), order.currency, amount)
-        if Decimal(str(balance.amount)) < credits_cost:
+        credits_cost = Credits.to_credits(
+            self.commerce.get_config(),
+            context.order.currency,
+            Decimal(context.payment.amount),
+        )
+        if Decimal(balance.amount) < credits_cost:
             raise self.commerce.get_bad_request("Not enough balance.")
 
-        now = datetime.now(UTC)
-        balance.amount = Decimal(str(balance.amount)) - credits_cost
-        balance.updated_at = now
-
-        payment = await self.create_parent_payment(
-            session,
-            order=order,
-            amount=amount,
-            is_paid=True,
-            payment_url=None,
+        balance.amount = Decimal(balance.amount) - credits_cost
+        balance.updated_at = datetime.now(UTC)
+        session.add(BalancePaymentORM(payment_ptr_id=context.payment.id))
+        await session.flush()
+        return PaymentCreateResult(
+            action=CheckoutAction(kind="completed"),
+            verification=PaymentVerificationResult(
+                state=PaymentState.PAID,
+                evidence_key=f"balance:{context.payment.public_id}",
+            ),
         )
-        session.add(BalancePaymentORM(payment_ptr_id=payment.id))
 
-        order.payment_id = payment.id
-        order.is_inited = True
-        order.is_paid = True
-        order.updated_at = now
+    async def refund(
+            self,
+            session: AsyncSession,
+            payment,
+    ) -> PaymentVerificationResult:
+        balance_query = (
+            select(UserCreditsBalanceORM)
+            .where(UserCreditsBalanceORM.user_id == payment.user_id)
+            .with_for_update()
+        )
+        balance = (await session.execute(balance_query)).scalar_one_or_none()
+        if balance is None:
+            balance = await self.commerce.get_or_create_balance(session, payment.user_id)
+        credits_amount = Credits.to_credits(
+            self.commerce.get_config(),
+            payment.currency,
+            Decimal(payment.amount),
+        )
+        balance.amount = Decimal(balance.amount) + credits_amount
+        balance.updated_at = datetime.now(UTC)
+        return PaymentVerificationResult(
+            state=PaymentState.REFUNDED,
+            evidence_key=f"balance-refund:{payment.public_id}",
+        )
 
-        await self.commerce.create_order_runtime().execute_order(session, order)
-        return payment
+    async def cancel(
+            self,
+            session: AsyncSession,
+            payment: PaymentORM,
+    ) -> PaymentVerificationResult:
+        _ = session
+        _ = payment
+        raise self.commerce.get_conflict("Balance payment cannot be cancelled.")
 
-    async def is_paid(self, session: AsyncSession, payment_id: int) -> bool:
-        payment = await session.get(PaymentORM, payment_id)
-        return bool(payment and payment.is_paid)
-
-    async def get_pay_link(self, session: AsyncSession, payment_id: int) -> str | None:
-        payment = await session.get(PaymentORM, payment_id)
-        return str(payment.payment_url) if payment and payment.payment_url is not None else None
-
-    async def refund(self, session: AsyncSession, order: OrderORM, payment: PaymentORM) -> None:
-        if order.user_id is None:
-            raise self.commerce.get_bad_request("User not found.")
-
-        credits_amount = Credits.to_credits(self.commerce.get_config(), order.currency, Decimal(str(order.amount or 0)))
-        balance = await self.commerce.get_or_create_balance(session, order.user_id)
-        now = datetime.now(UTC)
-        balance.amount = Decimal(str(balance.amount)) + credits_amount
-        balance.updated_at = now
-        payment.updated_at = now
-
-
+    async def get_action(
+            self,
+            session: AsyncSession,
+            payment: PaymentORM,
+    ) -> CheckoutAction:
+        _ = session
+        _ = payment
+        return CheckoutAction(kind="completed")

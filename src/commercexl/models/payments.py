@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
@@ -11,7 +11,10 @@ class BalancePaymentORM(CommerceBase):
 
     __tablename__ = "commerce_balance_payment"
 
-    payment_ptr_id: Mapped[int] = mapped_column(ForeignKey("commerce_payment.id"), primary_key=True)
+    payment_ptr_id: Mapped[int] = mapped_column(
+        ForeignKey("commerce_payment.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
 
 
 class HandMadePaymentORM(CommerceBase):
@@ -19,4 +22,7 @@ class HandMadePaymentORM(CommerceBase):
 
     __tablename__ = "commerce_handmade_payment"
 
-    payment_ptr_id: Mapped[int] = mapped_column(ForeignKey("commerce_payment.id"), primary_key=True)
+    payment_ptr_id: Mapped[int] = mapped_column(
+        ForeignKey("commerce_payment.id", ondelete="CASCADE"),
+        primary_key=True,
+    )

@@ -1,7 +1,4 @@
-﻿from commercexl.dto import CreateOrderDTO, CreateOrderIdOnlyDTO, OrderDTO
+from commercexl.dto import CreateOrderDTO, OrderDTO
 
-CreateOrderIdOnlyResponse = CreateOrderIdOnlyDTO
 CreateOrderResponse = CreateOrderDTO
 UserOrderResponse = OrderDTO
-
-
