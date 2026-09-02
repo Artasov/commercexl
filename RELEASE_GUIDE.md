@@ -52,6 +52,14 @@ review the version in the feature branch before the PR; do not run a second auto
 The GitHub `pypi` environment must have a Trusted Publisher for this repository and workflow.
 Publishing uses an OIDC token; a long-lived PyPI API token must not be added as a fallback.
 
+## @orcestr/commerce-ui release flow
+
+The first `@orcestr/commerce-ui` release must be published manually from `frontend` with
+`npm publish --workspace @orcestr/commerce-ui --access public`. Then configure its npm Trusted
+Publisher with organization `Artasov`, repository `commercexl`, workflow `ci.yml`, and environment
+`npm`. Later releases use an exact `commerce-ui-vX.Y.Z` tag; CI verifies the package version and
+publishes with provenance.
+
 ## 0.3 compatibility note
 
 Provider add-ons should depend on `commercexl>=0.3.1,<0.4`. Version 0.3.1 is the minimum safe

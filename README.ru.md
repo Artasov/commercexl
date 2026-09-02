@@ -44,8 +44,10 @@ FastAPI, Pydantic 2 и SQLAlchemy 2. Host-приложение владеет DB
 | HTTP | auth-neutral FastAPI router через `create_router(...)` |
 | Persistence | типизированные SQLAlchemy-модели через `CommerceBase` |
 
-В CommerceXL нет frontend, wallet-интеграции, blockchain verifier и секретов платежных провайдеров.
-Это зона отдельных provider-библиотек и adapter-ов host-приложения.
+В CommerceXL нет wallet-интеграции, blockchain verifier и секретов платежных провайдеров. Это зона
+отдельных provider-библиотек и adapter-ов host-приложения. Нейтральные к провайдеру
+React-компоненты checkout публикуются отдельно как `@orcestr/commerce-ui` из workspace
+`frontend/packages/ui`.
 
 ## Установка
 

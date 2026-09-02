@@ -1,0 +1,33 @@
+{
+  "name": "@orcestr/commerce-ui",
+  "version": "0.1.0",
+  "description": "Provider-neutral checkout and payment method components for CommerceXL hosts.",
+  "author": "Artasov",
+  "license": "MPL-2.0",
+  "keywords": ["checkout", "commerce", "commercexl", "orcestr", "payments", "react"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Artasov/commercexl.git",
+    "directory": "frontend/packages/ui"
+  },
+  "homepage": "https://github.com/Artasov/commercexl/tree/master/frontend/packages/ui#readme",
+  "bugs": {"url": "https://github.com/Artasov/commercexl/issues"},
+  "type": "module",
+  "sideEffects": ["./dist/styles.css"],
+  "files": ["dist", "LICENSE", "NOTICE", "README.md", "README.ru.md", "TRADEMARKS.md"],
+  "exports": {
+    ".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"},
+    "./styles.css": "./dist/styles.css"
+  },
+  "publishConfig": {"access": "public"},
+  "peerDependencies": {
+    "@orcestr/ui": "^0.7.4",
+    "react": "^19.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -b --pretty false",
+    "build": "tsc -b && node scripts/copy-styles.mjs",
+    "prepack": "node ../../scripts/sync-package-legal.mjs && npm run build",
+    "pack:dry-run": "npm pack --dry-run"
+  }
+}
