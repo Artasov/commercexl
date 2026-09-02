@@ -40,11 +40,11 @@ jobs:
             Write in English.
             Return only the final Telegram message text. Do not explain the format.
             These rules apply to automatic push updates and manual workflow tasks.
-            Automatic updates should cover meaningful CommerceXL API, checkout, payment lifecycle, security, persistence, documentation, release, dependency, or workflow progress.
+            Automatic updates should cover meaningful CommerceXL Python API, @orcestr/commerce-ui, checkout, payment lifecycle, security, persistence, documentation, release, dependency, or workflow progress.
             For automatic push updates, output exactly ORCESTR_NOTIFY_SKIP only when the entire push is formatting-only: Ruff autofix, import sorting, whitespace cleanup, generated file reformatting, or equivalent mechanical cleanup without semantic, configuration, documentation, workflow, dependency, or behavior changes.
             Do not skip meaningful CI/CD, release, packaging, dependency, documentation, security, payment state, idempotency, provider contract, money precision, outbox, schema, route, or adapter changes.
             If many changes are one repeated type of work, group them into one concise bullet.
-            Be concrete: name CommerceXL, its Python API, FastAPI routes, SQLAlchemy models, DTOs, payment provider contracts, lifecycle states, outbox, evidence claims, or migration guide when the diff proves it.
+            Be concrete: name CommerceXL, @orcestr/commerce-ui components, its Python API, FastAPI routes, SQLAlchemy models, DTOs, payment provider contracts, lifecycle states, outbox, evidence claims, or migration guide when the diff proves it.
             If pyproject.toml, uv.lock, package metadata, dependencies, release workflows, tags, or package versions changed, mention the exact package and version changes visible in the diff.
             Do not infer security, compatibility, or user-facing behavior that the diff does not prove.
             Avoid vague claims such as "better", "cleaner", "more robust", "polished", or "improved" unless the same bullet states exactly what changed.
@@ -57,7 +57,7 @@ jobs:
             Then one short closing line after a blank line.
             After the closing line, always add exactly this final link line:
             PyPI: https://pypi.org/project/commercexl/
-            If the push contains a package release or version bump, make the first bullet start with "• New release:" and include the exact CommerceXL version visible in the diff.
+            If the push contains a package release or version bump, make the first bullet start with "• New release:" and include the exact CommerceXL or @orcestr/commerce-ui version visible in the diff.
             The closing line may be a concise thank-you, a note for integrators, or a relevant invitation to use the package. Vary it between updates.
             Do not ask users to re-test, wait for a future fix, or perform follow-up work unless the manual task asks for it or the context proves it is required.
             Do not write filler such as "No visible app behavior changed".

@@ -44,8 +44,10 @@ sessions, users, authentication, CSRF policy, migrations and provider-specific c
 | HTTP | auth-neutral FastAPI router assembled through `create_router(...)` |
 | Persistence | typed SQLAlchemy models exposed through `CommerceBase` |
 
-CommerceXL does not include a frontend, wallet integration, blockchain verifier or payment-provider
-credentials. Those belong in separate provider packages and host adapters.
+CommerceXL does not include wallet integration, a blockchain verifier or payment-provider
+credentials. Those belong in separate provider packages and host adapters. The provider-neutral
+React checkout primitives are published separately as `@orcestr/commerce-ui` from the
+`frontend/packages/ui` workspace.
 
 ## Installation
 

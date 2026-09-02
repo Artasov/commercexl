@@ -8,3 +8,9 @@ dist/
 build/
 *.egg-info/
 .idea/
+frontend/node_modules/
+frontend/packages/*/dist/
+frontend/packages/*/tsconfig.tsbuildinfo
+frontend/packages/*/LICENSE
+frontend/packages/*/NOTICE
+frontend/packages/*/TRADEMARKS.md

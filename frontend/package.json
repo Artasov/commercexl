@@ -1,0 +1,26 @@
+{
+  "name": "commercexl-frontend-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && npm run sync:legal && tsc -b && npm run build:assets",
+    "build:assets": "node packages/ui/scripts/copy-styles.mjs",
+    "typecheck": "tsc -b --pretty false",
+    "pack:dry-run": "npm pack --dry-run --workspace @orcestr/commerce-ui",
+    "sync:legal": "node scripts/sync-package-legal.mjs"
+  },
+  "devDependencies": {
+    "@orcestr/ui": "0.7.4",
+    "@types/node": "25.0.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "typescript": "5.9.3"
+  }
+}
