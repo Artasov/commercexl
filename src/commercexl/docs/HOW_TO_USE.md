@@ -285,7 +285,49 @@ Read authoritative state through `GET /payments/{payment_public_id}/`. Use
 `POST /payments/{payment_public_id}/checkout-action/` only when the UI needs a fresh action. Status
 responses do not reproduce capability URLs from storage.
 
-## 6. Apply trusted verification
+## 6. Compose the provider-neutral checkout
+
+Install the shared shell once in the frontend application:
+
+```bash
+npm install @orcestr/commerce-ui @orcestr/ui react
+```
+
+For the published Solana provider, add the backend and frontend packages:
+
+```bash
+pip install orcestr-commerce-solana
+npm install @orcestr/commerce-solana-core @orcestr/commerce-solana-react @orcestr/commerce-solana-ui @tanstack/react-query
+```
+
+Import all visual styles once at the application root:
+
+```ts
+import "@orcestr/ui/styles.css";
+import "@orcestr/commerce-ui/styles.css";
+import "@orcestr/commerce-solana-ui/styles.css";
+```
+
+Keep the UI boundary provider-neutral:
+
+1. Render only the server-owned product price and `PaymentOptionDTO` values.
+2. Use `CommercePaymentMethodPicker` for explicit provider selection.
+3. Create the canonical payment attempt with only `payment_option_id` and an idempotency key.
+4. Open one `CommerceCheckoutDialog` and mount the selected provider view inside it. When using
+   `SolanaCheckout`, pass `showHeader={false}` so the shared dialog remains the only modal shell.
+5. Let the Solana view issue its short-lived action automatically and display the QR code, deep
+   link, waiting and result states. Do not persist or log the capability URI.
+6. Invalidate the authoritative payment query from the host's shared realtime event source. Do not
+   add a second WebSocket or polling loop.
+7. Unlock the product only after the backend reports the canonical CommerceXL state as `paid`.
+
+The host supplies its existing authenticated fetch, `QueryClient`, auth/CSRF behavior and shared
+event source. The Solana packages do not create a parallel authentication session. See the
+[Orcestr Commerce Solana documentation](https://github.com/Artasov/orcestr-commerce-solana) for
+backend registration, Token-2022 allowlists, recipient policy, RPC settings, transaction requests
+and reconciliation.
+
+## 7. Apply trusted verification
 
 Callback and reconciliation routes are provider/host responsibilities. After signature and payload
 validation, load the provider child and canonical payment, call the provider verifier, then apply the
@@ -305,7 +347,7 @@ await session.commit()
 executes or revokes product effects exactly once, and writes the outbox record atomically. It is a
 trusted backend API and is intentionally not exposed as a generic public HTTP route.
 
-## 7. Dispatch the transactional outbox
+## 8. Dispatch the transactional outbox
 
 The host owns a worker that claims pending `PaymentOutboxEventORM` rows after commit, publishes a
 minimal authenticated realtime invalidation event, and then marks each row delivered. Do not publish
@@ -315,7 +357,7 @@ authoritative REST state instead of trusting event payload as financial truth.
 The canonical client payload contains `order_public_id`, `payment_public_id`, `revision` and `state`.
 The outbox row keeps `user_id` separately as a server-side routing key.
 
-## 8. Upgrade from 0.2
+## 9. Upgrade from 0.2
 
 Do not keep both contracts. Remove the old payment URL, boolean order/payment flags, one-step order
 creation and provider class registration in the same host release. Follow

@@ -49,6 +49,31 @@ FastAPI, Pydantic 2 и SQLAlchemy 2. Host-приложение владеет DB
 React-компоненты checkout публикуются отдельно как `@orcestr/commerce-ui` из workspace
 `frontend/packages/ui`.
 
+## Checkout UI и платежи Solana
+
+Публичные пакеты соединяются без переноса provider-логики в commerce core:
+
+| Пакет | Ответственность |
+| --- | --- |
+| [`commercexl`](https://pypi.org/project/commercexl/) | Authoritative продукты, цены в БД, заказы, payment attempts, verification lifecycle и однократное исполнение продукта. |
+| [`@orcestr/commerce-ui`](https://www.npmjs.com/package/@orcestr/commerce-ui) | Нейтральное к провайдеру React-окно и стандартизированный выбор способа оплаты. |
+| [`orcestr-commerce-solana`](https://pypi.org/project/orcestr-commerce-solana/) | Backend-провайдер Solana, transaction requests, reconciliation и finalized-проверка транзакций. |
+| [`@orcestr/commerce-solana-core`](https://www.npmjs.com/package/@orcestr/commerce-solana-core) | Типизированный API client, точные суммы, Solana URI helpers и клиентская проверка транзакции. |
+| [`@orcestr/commerce-solana-react`](https://www.npmjs.com/package/@orcestr/commerce-solana-react) | Интеграция React Query, Wallet Standard и общих realtime-событий. |
+| [`@orcestr/commerce-solana-ui`](https://www.npmjs.com/package/@orcestr/commerce-solana-ui) | QR, wallet deep link, ожидание, подтверждение и восстановление на `@orcestr/ui`. |
+
+Host показывает серверные цены и варианты оплаты в одном Commerce-окне, а UI выбранного провайдера
+встраивает внутрь него. Solana-дополнение автоматически выпускает короткоживущее действие для
+кошелька и показывает QR-код и deep link. Callback кошелька не считается доказательством оплаты:
+только точная backend-проверка с commitment `finalized` может перевести CommerceXL в `paid` и
+исполнить заказ.
+
+Solana-провайдер поддерживает native SOL и явно разрешённые fungible-активы Token-2022. Legacy SPL
+Token Program намеренно отклоняется. Проверка работает через стандартный Solana JSON-RPC и не
+требует платного API, webhook, индексатора, hosted checkout или приватного ключа серверного
+кошелька. Аутентификация, ownership и CSRF остаются внедряемой ответственностью host-приложения, в
+том числе при использовании Orcestr Auth.
+
 ## Установка
 
 ```bash
@@ -201,6 +226,7 @@ target_metadata = [Base.metadata, CommerceBase.metadata]
 ## Документация
 
 - [Руководство по интеграции](./src/commercexl/docs/HOW_TO_USE.md)
+- [Сборка checkout UI и Solana](./src/commercexl/docs/HOW_TO_USE.md#6-compose-the-provider-neutral-checkout)
 - [Миграция на 0.3](./src/commercexl/docs/MIGRATION_0_3.md)
 - [Промокоды](./src/commercexl/docs/PROMOCODES.md)
 - [Подарочные сертификаты](./src/commercexl/docs/GIFT_CERTIFICATES.md)
@@ -225,4 +251,5 @@ uv build
 - [Orcestr](https://orcestr.com)
 - [Orcestr Auth](https://github.com/Artasov/orcestr-auth)
 - [Orcestr UI](https://github.com/Artasov/orcestr-ui)
+- [Orcestr Commerce Solana](https://github.com/Artasov/orcestr-commerce-solana)
 - [Orcestr OS](https://github.com/Artasov/orcestr-os)
