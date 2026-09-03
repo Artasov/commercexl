@@ -14,6 +14,27 @@ accessible modal shell around the selected provider UI.
 The package never computes prices and never accepts a client-supplied amount. Render server-owned
 catalog options and submit only their stable option IDs to checkout.
 
+## Composing a provider
+
+Use `CommercePaymentMethodPicker` for all available provider options and keep
+`CommerceCheckoutDialog` as the single modal shell. Mount the selected provider view inside the
+dialog instead of creating a separate modal per provider.
+
+For Solana checkout, install the published provider packages:
+
+```bash
+npm install @orcestr/commerce-solana-core @orcestr/commerce-solana-react @orcestr/commerce-solana-ui @tanstack/react-query
+```
+
+Import `@orcestr/commerce-solana-ui/styles.css`, then render `SolanaCheckout` inside the shared
+dialog with `showHeader={false}`. The Solana view automatically creates a fresh short-lived wallet
+action and shows the QR code, deep link and payment states. Only authoritative backend `paid` state
+may unlock a product; a wallet callback is not payment proof.
+
+See the [CommerceXL integration guide](https://github.com/Artasov/commercexl/blob/master/src/commercexl/docs/HOW_TO_USE.md#6-compose-the-provider-neutral-checkout)
+and [Orcestr Commerce Solana](https://github.com/Artasov/orcestr-commerce-solana) for the complete
+backend, authentication, realtime and finalized-verification boundaries.
+
 ## Build and local integration
 
 ```bash

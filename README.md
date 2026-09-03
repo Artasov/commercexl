@@ -49,6 +49,30 @@ credentials. Those belong in separate provider packages and host adapters. The p
 React checkout primitives are published separately as `@orcestr/commerce-ui` from the
 `frontend/packages/ui` workspace.
 
+## Checkout UI and Solana payments
+
+The public packages compose without merging provider logic into the commerce core:
+
+| Package | Responsibility |
+| --- | --- |
+| [`commercexl`](https://pypi.org/project/commercexl/) | Authoritative products, database-backed prices, orders, payment attempts, verification lifecycle and exactly-once fulfillment. |
+| [`@orcestr/commerce-ui`](https://www.npmjs.com/package/@orcestr/commerce-ui) | Provider-neutral React dialog and standardized payment-method selection. |
+| [`orcestr-commerce-solana`](https://pypi.org/project/orcestr-commerce-solana/) | Backend Solana provider, transaction requests, reconciliation and finalized transaction verification. |
+| [`@orcestr/commerce-solana-core`](https://www.npmjs.com/package/@orcestr/commerce-solana-core) | Typed API client, exact amounts, Solana URI helpers and client-side transaction validation. |
+| [`@orcestr/commerce-solana-react`](https://www.npmjs.com/package/@orcestr/commerce-solana-react) | React Query, Wallet Standard and shared realtime-event integration. |
+| [`@orcestr/commerce-solana-ui`](https://www.npmjs.com/package/@orcestr/commerce-solana-ui) | QR, wallet deep link, waiting, confirmation and recovery views built on `@orcestr/ui`. |
+
+The host renders server-owned prices and payment options in one Commerce dialog, then mounts the
+selected provider UI inside it. The Solana add-on automatically issues a short-lived wallet action
+and displays its QR code and deep link. A wallet callback is never proof of payment: only the
+backend's exact `finalized` verification may advance CommerceXL to `paid` and fulfill the order.
+
+The Solana provider supports native SOL and explicitly allowlisted Token-2022 fungible assets. It
+deliberately rejects the legacy SPL Token Program. Verification works through standard Solana
+JSON-RPC and does not require a paid API, webhook, indexer, hosted checkout or a server-side wallet
+private key. Authentication, ownership and CSRF remain injected host responsibilities, including
+when the host uses Orcestr Auth.
+
 ## Installation
 
 ```bash
@@ -203,6 +227,7 @@ data.
 ## Documentation
 
 - [Integration guide](./src/commercexl/docs/HOW_TO_USE.md)
+- [Checkout UI and Solana composition](./src/commercexl/docs/HOW_TO_USE.md#6-compose-the-provider-neutral-checkout)
 - [0.3 migration guide](./src/commercexl/docs/MIGRATION_0_3.md)
 - [Promocodes](./src/commercexl/docs/PROMOCODES.md)
 - [Gift certificates](./src/commercexl/docs/GIFT_CERTIFICATES.md)
@@ -227,4 +252,5 @@ to MPL-covered files remain subject to the MPL. See [NOTICE](./NOTICE) and
 - [Orcestr](https://orcestr.com)
 - [Orcestr Auth](https://github.com/Artasov/orcestr-auth)
 - [Orcestr UI](https://github.com/Artasov/orcestr-ui)
+- [Orcestr Commerce Solana](https://github.com/Artasov/orcestr-commerce-solana)
 - [Orcestr OS](https://github.com/Artasov/orcestr-os)
