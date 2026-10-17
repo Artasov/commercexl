@@ -37,7 +37,11 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Inspect package
+      - name: Test checkout dialog
+        working-directory: frontend
+        run: node --test tests/checkout-dialog.test.mjs
+
+      - name: Inspect package artifacts
         working-directory: frontend
         run: npm run pack:dry-run
 
