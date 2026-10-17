@@ -185,6 +185,9 @@ jobs:
             exit 1
           fi
 
+      - name: Use Trusted Publishing compatible npm
+        run: npm install --global npm@11.6.2
+
       - name: Publish package with provenance
         working-directory: frontend
         run: npm publish --workspace @orcestr/commerce-ui --access public --provenance
