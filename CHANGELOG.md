@@ -1,5 +1,10 @@
 # Changelog
 
+## Frontend UI 0.1.2
+
+- Support Orcestr UI 0.8 and verify checkout against UI 0.8.3.
+- Use the same OIDC-compatible npm version as the Solana release workflow.
+
 ## Frontend UI 0.1.1
 
 - Move checkout dismissal to an accessible close icon beside the title.
