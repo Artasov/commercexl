@@ -1,5 +1,10 @@
 # Changelog
 
+## Frontend UI 0.1.1
+
+- Move checkout dismissal to an accessible close icon beside the title.
+- Respect the payment submission lock for every dismissal path, including Escape.
+
 ## 0.3.3
 
 - Added the typed async `filter_public_products` host hook to `CommerceHTTPConfig`.

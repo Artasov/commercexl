@@ -38,7 +38,7 @@ classifiers = [
 dependencies = [
     "fastapi>=0.115.0",
     "pydantic>=2.9.0",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",
 ]
 
 [project.optional-dependencies]
